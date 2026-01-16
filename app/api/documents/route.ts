@@ -4,6 +4,17 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 
+type TxnLite = { id: string; address: string | null; createdAt: Date };
+type ProjectLite = { id: string; name: string; summary: Prisma.JsonValue | null; updatedAt: Date };
+type DocLite = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  createdAt: Date;
+  transactionId: string | null;
+};
+
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -14,7 +25,7 @@ export async function GET() {
     new Set([session.user.id, session.user.email].filter((v): v is string => typeof v === "string" && v.length > 0))
   );
 
-  const [docs, txns, projects] = await Promise.all([
+  const [docs, txns, projects] = (await Promise.all([
     db.document.findMany({
       where: { userId: { in: userIds } },
       orderBy: { createdAt: "desc" },
@@ -29,7 +40,7 @@ export async function GET() {
       select: { id: true, name: true, summary: true, updatedAt: true },
       orderBy: { updatedAt: "desc" },
     }),
-  ]);
+  ])) as [DocLite[], TxnLite[], ProjectLite[]];
 
   const normalize = (v: string) => v.trim().toLowerCase();
   const stripPdf = (name: string) => name.replace(/\.pdf$/i, "");
