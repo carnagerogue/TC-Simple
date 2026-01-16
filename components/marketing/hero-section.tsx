@@ -2,7 +2,6 @@
 
 import type React from "react";
 import { useCallback } from "react";
-import Image from "next/image";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { GlassCard } from "@/components/marketing/glass-card";
 import { Logo } from "@/components/logo";

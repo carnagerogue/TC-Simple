@@ -20,6 +20,14 @@ type Props = {
   tasks: PriorityTask[];
 };
 
+type TaskPatchPayload = {
+  status?: string;
+  priority?: boolean;
+  notes?: string | null;
+  dueDate?: string | null;
+  tags?: string | null;
+};
+
 export function PriorityTasksPanel({ tasks }: Props) {
   const [items, setItems] = useState<PriorityTask[]>(tasks);
   const [detail, setDetail] = useState<{ open: boolean; task: PriorityTask | null }>({
@@ -28,7 +36,7 @@ export function PriorityTasksPanel({ tasks }: Props) {
   });
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const updateTask = (taskId: string, projectId: string, payload: Record<string, any>) =>
+  const updateTask = (taskId: string, projectId: string, payload: TaskPatchPayload) =>
     fetch(`/api/projects/${projectId}/tasks/${taskId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

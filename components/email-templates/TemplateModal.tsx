@@ -14,6 +14,8 @@ type TemplatePayload = {
   favorite?: boolean;
 };
 
+type CategoryOption = TemplateCategory | "GENERAL";
+
 type Props = {
   open: boolean;
   initial?: Partial<TemplatePayload> & { id?: string; version?: number };
@@ -37,13 +39,15 @@ export function TemplateModal({ open, initial, onClose, onSaved }: Props) {
 
   useEffect(() => {
     if (open) {
+      const initialCategory =
+        typeof initial?.category === "string" ? (initial.category.toUpperCase() as CategoryOption) : initial?.category;
       setForm({
         name: initial?.name || "",
-        category: (initial?.category as any) || "GENERAL",
+        category: initialCategory || "GENERAL",
         description: initial?.description || "",
         subject: initial?.subject || "",
         body: initial?.body || "",
-        tags: (initial as any)?.tags || "",
+        tags: initial?.tags || "",
         favorite: Boolean(initial?.favorite),
       });
       setError(null);
@@ -69,8 +73,9 @@ export function TemplateModal({ open, initial, onClose, onSaved }: Props) {
       if (!res.ok) throw new Error(json.error || "Unable to save template");
       await onSaved();
       onClose();
-    } catch (e: any) {
-      setError(e.message || "Unable to save template");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      setError(error.message || "Unable to save template");
     } finally {
       setSaving(false);
     }

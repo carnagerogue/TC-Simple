@@ -19,6 +19,13 @@ type Template = {
   name: string;
 };
 
+type TaskListItem = {
+  id: string;
+  title: string;
+  dueDate: string | null;
+  status: string;
+};
+
 type ParsedItem = { key: string; label: string; value: string };
 
 type Props = {
@@ -109,9 +116,9 @@ export function TransactionTasksBoard({
       // refetch tasks
       const list = await fetch(`/api/tasks/list?transactionId=${transactionId}`);
       if (list.ok) {
-        const data = await list.json();
+        const data = (await list.json()) as TaskListItem[];
         setTasks(
-          data.map((t: any) => ({
+          data.map((t) => ({
             id: t.id,
             title: t.title,
             dueDate: t.dueDate,

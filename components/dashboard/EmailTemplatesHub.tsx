@@ -24,6 +24,12 @@ type Stats = {
   mostUsed: { name: string; count: number } | null;
 };
 
+type TemplatesApiResponse = {
+  templates?: Template[];
+  stats?: Stats;
+  error?: string;
+};
+
 export function EmailTemplatesHub() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, favorites: 0, mostUsed: null });
@@ -36,18 +42,19 @@ export function EmailTemplatesHub() {
       setError(null);
       try {
         const res = await fetch("/api/email-templates", { cache: "no-store" });
-        const json = await res.json();
+        const json = (await res.json()) as TemplatesApiResponse;
         if (!res.ok) throw new Error(json.error || "Failed to load templates");
         setTemplates(json.templates || []);
         setStats(
           json.stats || {
             total: (json.templates || []).length,
-            favorites: (json.templates || []).filter((t: any) => t.favorite).length,
+            favorites: (json.templates || []).filter((t) => t.favorite).length,
             mostUsed: null,
           }
         );
-      } catch (e: any) {
-        setError(e.message || "Unable to load templates");
+      } catch (e: unknown) {
+        const error = e as { message?: string };
+        setError(error.message || "Unable to load templates");
       } finally {
         setLoading(false);
       }

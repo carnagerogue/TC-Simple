@@ -59,7 +59,10 @@ export function ContactHistoryModal({
         return res.json();
       })
       .then((json) => setData(json))
-      .catch((e: any) => setError(e.message || "Unable to load history"))
+      .catch((e: unknown) => {
+        const error = e as { message?: string };
+        setError(error.message || "Unable to load history");
+      })
       .finally(() => setLoading(false));
   }, [open, contactId]);
 

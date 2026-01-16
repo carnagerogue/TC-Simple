@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 type Props = {
   name: string;
   photoUrl?: string;
@@ -15,9 +17,11 @@ export function ContactAvatar({ name, photoUrl }: Props) {
 
   if (photoUrl) {
     return (
-      <img
+      <Image
         src={photoUrl}
         alt={name}
+        width={40}
+        height={40}
         className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow-sm"
       />
     );
