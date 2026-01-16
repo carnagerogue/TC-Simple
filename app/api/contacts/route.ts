@@ -6,6 +6,19 @@ import { db } from "@/lib/db";
 const VALID_CATEGORIES = ["AGENT", "CLIENT", "ESCROW", "VENDOR", "LENDER", "TITLE", "OTHER"] as const;
 type Category = (typeof VALID_CATEGORIES)[number];
 
+type ContactWhere = {
+  userId: string;
+  category?: string;
+  OR?: Array<
+    | { firstName: { contains: string; mode: "insensitive" } }
+    | { lastName: { contains: string; mode: "insensitive" } }
+    | { email: { contains: string; mode: "insensitive" } }
+    | { phone: { contains: string; mode: "insensitive" } }
+    | { company: { contains: string; mode: "insensitive" } }
+    | { role: { contains: string; mode: "insensitive" } }
+  >;
+};
+
 type ContactPayload = {
   firstName: string;
   lastName?: string | null;
@@ -37,7 +50,7 @@ function buildWhere(userId: string, searchParams: URLSearchParams) {
   const q = searchParams.get("q")?.trim();
   const category = searchParams.get("category")?.toUpperCase();
 
-  const where: NonNullable<Parameters<typeof db.contact.findMany>[0]["where"]> = { userId };
+  const where: ContactWhere = { userId };
 
   if (category && VALID_CATEGORIES.includes(category as Category)) {
     where.category = category;
