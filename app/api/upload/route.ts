@@ -3,10 +3,40 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
+type SessionUser = { id?: string; email?: string | null };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function safeDate(value: unknown): Date | null {
+  if (value == null) return null;
+  if (typeof value === "string" || typeof value === "number" || value instanceof Date) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function safeFloat(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const parsed = parseFloat(value.replace(/[^0-9.]/g, ""));
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
+function getString(obj: Record<string, unknown>, key: string): string | null {
+  const v = obj[key];
+  return typeof v === "string" && v.trim().length > 0 ? v : null;
+}
+
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-
-  if (!session?.user) {
+  const user = session?.user as SessionUser | undefined;
+  const userId = user?.id || user?.email || null;
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -25,10 +55,9 @@ export async function POST(request: NextRequest) {
   const buffer = Buffer.from(arrayBuffer);
 
   try {
-    // Save raw file in database (per-user)
     const document = await db.document.create({
       data: {
-        userId: session.user.id || session.user.email!,
+        userId,
         filename: file.name,
         mimeType: file.type || "application/pdf",
         size: file.size,
@@ -36,11 +65,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    let transactionId = null;
-    let parsedData = null;
+    let transactionId: string | null = null;
+    let parsedData: Record<string, unknown> | null = null;
 
-    // Call Intake Service
-  try {
+    // Call Intake Service (best-effort)
+    try {
       const intakeUrl = process.env.INTAKE_SERVICE_URL || "http://localhost:8000/intake";
       const intakeFormData = new FormData();
       intakeFormData.append("file", new Blob([buffer], { type: file.type }), file.name);
@@ -51,76 +80,68 @@ export async function POST(request: NextRequest) {
       });
 
       if (intakeRes.ok) {
-        parsedData = await intakeRes.json();
-        console.log("Intake service parsed data:", parsedData);
+        const json = (await intakeRes.json().catch(() => null)) as unknown;
+        parsedData = isRecord(json) ? json : null;
       } else {
         console.warn("Intake service failed:", await intakeRes.text());
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.warn("Failed to connect to intake service:", e);
     }
 
-    // Create Transaction in DB
+    // Create Transaction in DB (best-effort)
     try {
-      const safeDate = (dateStr: unknown) => {
-        if (!dateStr) return null;
-        const d = new Date(dateStr);
-        return isNaN(d.getTime()) ? null : d;
-      };
-
-      const safeFloat = (val: unknown) => {
-        if (typeof val === "number") return val;
-        if (typeof val === "string") {
-          const parsed = parseFloat(val.replace(/[^0-9.]/g, ""));
-          return isNaN(parsed) ? null : parsed;
-        }
-        return null;
-      };
-
-      const p = parsedData || {};
+      const p = parsedData ?? {};
 
       const transaction = await db.transaction.create({
         data: {
-          address: p.property_address || file.name.replace(/\.pdf$/i, ""),
-          city: p.property_city || null,
-          county: p.property_county || null,
-          state: p.property_state || null,
-          zip: p.property_zip || null,
-          
-          buyerName: p.buyer_name || null,
-          sellerName: p.seller_name || null,
-          
-          contractDate: safeDate(p.contract_date),
-          effectiveDate: safeDate(p.effective_date),
-          closingDate: safeDate(p.closing_date),
-          possessionDate: safeDate(p.possession_date),
-          earnestMoneyDueDate: safeDate(p.earnest_money_delivery_date),
-          
-          purchasePrice: safeFloat(p.purchase_price),
-          earnestMoneyAmount: safeFloat(p.earnest_money_amount),
-          
-          titleCompany: p.title_insurance_company || null,
-          closingCompany: p.closing_agent_company || null,
-          closingAgentName: p.closing_agent_name || null,
-          
-          includedItems: Array.isArray(p.included_items) ? p.included_items.join(", ") : (typeof p.included_items === 'string' ? p.included_items : null),
-          
+          address: getString(p, "property_address") ?? file.name.replace(/\\.pdf$/i, ""),
+          city: getString(p, "property_city"),
+          county: getString(p, "property_county"),
+          state: getString(p, "property_state"),
+          zip: getString(p, "property_zip"),
+
+          buyerName: getString(p, "buyer_name"),
+          sellerName: getString(p, "seller_name"),
+
+          contractDate: safeDate(p["contract_date"]),
+          effectiveDate: safeDate(p["effective_date"]),
+          closingDate: safeDate(p["closing_date"]),
+          possessionDate: safeDate(p["possession_date"]),
+          earnestMoneyDueDate: safeDate(p["earnest_money_delivery_date"]),
+
+          purchasePrice: safeFloat(p["purchase_price"]),
+          earnestMoneyAmount: safeFloat(p["earnest_money_amount"]),
+
+          titleCompany: getString(p, "title_insurance_company"),
+          closingCompany: getString(p, "closing_agent_company"),
+          closingAgentName: getString(p, "closing_agent_name"),
+
+          includedItems: (() => {
+            const v = p["included_items"];
+            if (Array.isArray(v)) {
+              const parts = v.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+              return parts.length ? parts.join(", ") : null;
+            }
+            return typeof v === "string" && v.trim().length > 0 ? v : null;
+          })(),
+
           stage: "Intake",
-          userId: session.user.id || session.user.email!, 
+          userId,
         },
       });
+
       transactionId = transaction.id;
 
-      // Link the uploaded document to the created transaction for audit/history views
       try {
         await db.document.update({
           where: { id: document.id },
           data: { transactionId: transaction.id },
         });
-      } catch (linkErr) {
+      } catch (linkErr: unknown) {
         console.warn("Failed to link document to transaction:", linkErr);
       }
-    } catch (dbError) {
+    } catch (dbError: unknown) {
       console.error("Failed to save transaction to DB:", dbError);
     }
 
@@ -128,17 +149,13 @@ export async function POST(request: NextRequest) {
       message: "Upload processed successfully.",
       fileName: file.name,
       fileSize: file.size,
-      uploadedBy: session.user.email,
+      uploadedBy: user?.email ?? null,
       documentId: document.id,
       transactionId,
       parsedData,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Failed to process upload:", error);
-    return NextResponse.json(
-      { error: "Unable to save the file. Please try again." },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Unable to save the file. Please try again." }, { status: 500 });
   }
 }
-
