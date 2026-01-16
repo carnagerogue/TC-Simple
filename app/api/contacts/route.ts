@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -20,6 +21,11 @@ type ContactPayload = {
   lastInteraction?: string | null;
 };
 
+type SessionUser = {
+  id?: string;
+  email?: string | null;
+};
+
 function parseSort(sortParam?: string | null) {
   if (sortParam === "name") {
     return [{ firstName: "asc" as const }, { lastName: "asc" as const }];
@@ -32,7 +38,7 @@ function buildWhere(userId: string, searchParams: URLSearchParams) {
   const q = searchParams.get("q")?.trim();
   const category = searchParams.get("category")?.toUpperCase();
 
-  const where: any = { userId };
+  const where: Prisma.ContactWhereInput = { userId };
 
   if (category && VALID_CATEGORIES.includes(category as Category)) {
     where.category = category;
@@ -54,7 +60,8 @@ function buildWhere(userId: string, searchParams: URLSearchParams) {
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id || session?.user?.email || null;
+  const user = session?.user as SessionUser | undefined;
+  const userId = user?.id || user?.email || null;
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -74,7 +81,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id || session?.user?.email || null;
+  const user = session?.user as SessionUser | undefined;
+  const userId = user?.id || user?.email || null;
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -120,8 +128,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ contact });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("Create contact error", e);
-    return NextResponse.json({ error: e?.message || "Failed to create contact" }, { status: 500 });
+    const error = e as { message?: string };
+    return NextResponse.json({ error: error.message ?? "Failed to create contact" }, { status: 500 });
   }
 }

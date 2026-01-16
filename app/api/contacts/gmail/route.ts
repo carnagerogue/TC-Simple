@@ -14,6 +14,18 @@ type NormalizedContact = {
   source: "gmail";
 };
 
+type PeopleConnection = {
+  resourceName?: string;
+  names?: Array<{ displayName?: string }>;
+  emailAddresses?: Array<{ value?: string }>;
+  phoneNumbers?: Array<{ value?: string }>;
+  photos?: Array<{ url?: string }>;
+};
+
+type PeopleConnectionsResponse = {
+  connections?: PeopleConnection[];
+};
+
 function splitName(displayName?: string): { firstName: string; lastName?: string } {
   if (!displayName) return { firstName: "Unknown" };
   const parts = displayName.trim().split(/\s+/);
@@ -21,10 +33,10 @@ function splitName(displayName?: string): { firstName: string; lastName?: string
   return { firstName: parts.shift() || "Unknown", lastName: parts.join(" ") || undefined };
 }
 
-function normalizePeopleConnections(data: any): NormalizedContact[] {
-  const connections = data.connections || [];
+function normalizePeopleConnections(data: PeopleConnectionsResponse): NormalizedContact[] {
+  const connections = data.connections ?? [];
   return connections
-    .map((person: any) => {
+    .map((person) => {
       const names = person.names?.[0];
       const emails = person.emailAddresses?.[0];
       const phones = person.phoneNumbers?.[0];
@@ -79,7 +91,7 @@ export async function GET() {
       throw new Error(`People API error: ${txt}`);
     }
 
-    const json = await res.json();
+    const json = (await res.json()) as PeopleConnectionsResponse;
     const contacts = normalizePeopleConnections(json);
 
     // Upsert into local DB; dedupe by userId + email
@@ -113,10 +125,11 @@ export async function GET() {
     }
 
     return NextResponse.json({ contacts });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("gmail contacts error", e);
+    const error = e as { message?: string };
     return NextResponse.json(
-      { error: "Unable to load Gmail contacts", detail: e?.message ?? "unknown error" },
+      { error: "Unable to load Gmail contacts", detail: error.message ?? "unknown error" },
       { status: 500 }
     );
   }

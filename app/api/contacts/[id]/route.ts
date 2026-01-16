@@ -68,11 +68,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       },
     });
     return NextResponse.json({ contact: updated });
-  } catch (e: any) {
-    if (e.code === "P2025") {
+  } catch (e: unknown) {
+    const error = e as { code?: string; message?: string };
+    if (error.code === "P2025") {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json({ error: "Unable to update contact", detail: e?.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Unable to update contact", detail: error.message ?? "unknown error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -89,10 +93,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     }
     await db.contact.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    if (e.code === "P2025") {
+  } catch (e: unknown) {
+    const error = e as { code?: string; message?: string };
+    if (error.code === "P2025") {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json({ error: "Unable to delete contact", detail: e?.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Unable to delete contact", detail: error.message ?? "unknown error" },
+      { status: 500 }
+    );
   }
 }
