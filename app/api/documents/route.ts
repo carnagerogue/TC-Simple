@@ -100,7 +100,7 @@ export async function GET() {
         if (txn) {
           const byTxn = projectByTxnId.get(txn.id);
           if (byTxn) return byTxn;
-          const byAddr = projectByAddress.get(normalize(txn.address));
+          const byAddr = txn.address ? projectByAddress.get(normalize(txn.address)) : undefined;
           if (byAddr) return byAddr;
         }
         return null;
