@@ -35,7 +35,6 @@ export function ProjectsBoard({ primary, active, completed }: Props) {
   const [dragOver, setDragOver] = useState<ColumnKey | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  // Define columns as a typed array to help TypeScript inference
   const columns: ColumnKey[] = ["primary", "active", "completed"];
 
   const columnData: Record<ColumnKey, ProjectCard[]> = useMemo(
@@ -80,7 +79,6 @@ export function ProjectsBoard({ primary, active, completed }: Props) {
         return next;
       });
 
-      // Batch state updates for performance
       const movingProjects = [...primaryList, ...activeList]
         .filter((p) => ids.includes(p.id))
         .map((p) => ({
@@ -122,7 +120,6 @@ export function ProjectsBoard({ primary, active, completed }: Props) {
     let sourceCol: ColumnKey | null = null;
     let targetProject: ProjectCard | null = null;
 
-    // Search for the project in columns
     for (const key of columns) {
       const found = columnData[key].find((p) => p.id === draggingId);
       if (found) {
@@ -148,16 +145,11 @@ export function ProjectsBoard({ primary, active, completed }: Props) {
         body: JSON.stringify({ status, isPrimary }),
       });
 
-      // Senior Fix: Use local variables to avoid closure-related type issues
       const currentSourceItems = [...columnData[sourceCol]];
       const nextSourceList = currentSourceItems.filter((p) => p.id !== draggingId);
       setColumn(sourceCol, nextSourceList);
 
-      const updatedProject: ProjectCard = { 
-        ...targetProject, 
-        status, 
-        isPrimary 
-      };
+      const updatedProject: ProjectCard = { ...targetProject, status, isPrimary };
 
       if (target === "completed") {
         updatedProject.tasks = updatedProject.tasks.map((t) => ({ ...t, status: "completed" }));
@@ -168,10 +160,7 @@ export function ProjectsBoard({ primary, active, completed }: Props) {
         setActiveList((prev) => prev.map((p) => ({ ...p, isPrimary: false })));
         setCompletedList((prev) => prev.map((p) => ({ ...p, isPrimary: false })));
       } else {
-        // If it was primary and is moving out, primaryList is now empty
-        if (sourceCol === "primary") {
-          setPrimaryList([]);
-        }
+        if (sourceCol === "primary") setPrimaryList([]);
         const currentTargetItems = [...columnData[target]].filter(p => p.id !== draggingId);
         setColumn(target, [...currentTargetItems, updatedProject]);
       }
@@ -181,3 +170,116 @@ export function ProjectsBoard({ primary, active, completed }: Props) {
       console.error("Failed to move project", e);
     } finally {
       setDraggingId(null);
+      setDragOver(null);
+    }
+  };
+
+  const card = (p: ProjectCard) => {
+    const openCount = p.tasks.filter((t) => t.status !== "completed").length;
+    const total = p.tasks.length;
+    const isDragging = draggingId === p.id;
+    const isSelected = selected.has(p.id);
+    
+    return (
+      <div
+        key={p.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => router.push(`/projects/${p.id}/tasks`)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") router.push(`/projects/${p.id}/tasks`);
+        }}
+        className={`flex items-center justify-between rounded-2xl border ${
+          isDragging ? "border-[#9bc4ff]" : "border-slate-200/70"
+        } bg-white px-4 py-3 text-sm shadow-sm hover:border-[#9bc4ff] ${isDragging ? "opacity-70" : ""}`}
+      >
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onClick={(e) => e.stopPropagation()}
+            onChange={() => toggleSelect(p.id)}
+            className="h-4 w-4 rounded border-[#9bc4ff] text-[#9bc4ff]"
+          />
+          <div
+            className="flex h-5 w-5 items-center justify-center text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing"
+            draggable="true"
+            onDragStart={(e) => {
+              setDraggingId(p.id);
+              e.dataTransfer.setData("text/plain", p.id);
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <circle cx="2" cy="2" r="1" /><circle cx="7" cy="2" r="1" /><circle cx="12" cy="2" r="1" />
+              <circle cx="2" cy="7" r="1" /><circle cx="7" cy="7" r="1" /><circle cx="12" cy="7" r="1" />
+              <circle cx="2" cy="12" r="1" /><circle cx="7" cy="12" r="1" /><circle cx="12" cy="12" r="1" />
+            </svg>
+          </div>
+          <div className="space-y-1">
+            <p className="font-semibold text-slate-900">{p.name}</p>
+            <p className="text-xs text-slate-500">{openCount} open / {total} tasks</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          {p.isPrimary && (
+            <span className="rounded-full bg-[#eaf2ff] px-2 py-1 text-[11px] font-semibold text-[#1b4c96]">
+              Primary
+            </span>
+          )}
+          <span>{new Date(p.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-3">
+      {columns.map((col) => (
+        <div
+          key={col}
+          className={`rounded-3xl border ${
+            dragOver === col ? "border-[#9bc4ff] bg-[#f5f8ff]" : "border-slate-200/70 bg-white/80"
+          } p-5 shadow-sm backdrop-blur transition`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(col); }}
+          onDragLeave={() => setDragOver(null)}
+          onDrop={(e) => { e.preventDefault(); handleDrop(col); }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">{columnLabels[col]}</h2>
+              <span className="text-xs text-slate-500">{columnData[col].length} total</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {col !== "completed" && (
+                <button
+                  type="button"
+                  disabled={!columnData[col].some(p => selected.has(p.id))}
+                  onClick={() => handleMarkComplete(columnData[col].filter(p => selected.has(p.id)).map(p => p.id))}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Mark Complete
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={!columnData[col].some(p => selected.has(p.id))}
+                onClick={() => handleDelete(columnData[col].filter(p => selected.has(p.id)).map(p => p.id))}
+                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 space-y-2 min-h-[100px]">
+            {columnData[col].map((p) => card(p))}
+            {columnData[col].length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-400">
+                No projects here.
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
