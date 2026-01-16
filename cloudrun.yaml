@@ -1,0 +1,5 @@
+runtime: container
+env:
+  - name: OPENAI_API_KEY
+    value: ${OPENAI_API_KEY}
+

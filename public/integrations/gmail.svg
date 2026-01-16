@@ -1,0 +1,7 @@
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Gmail">
+  <rect width="48" height="48" rx="10" fill="#F2F2F2"/>
+  <path d="M8 14L24 26L40 14V36C40 38.2091 38.2091 40 36 40H12C9.79086 40 8 38.2091 8 36V14Z" fill="white"/>
+  <path d="M8 14L24 26L40 14" stroke="#EA4335" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M12 34V18L24 27L36 18V34" stroke="#34A853" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+

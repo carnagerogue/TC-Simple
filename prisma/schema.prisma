@@ -1,0 +1,284 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Transaction {
+  id            String    @id @default(cuid())
+  
+  // Property Details
+  address       String
+  city          String?
+  county        String?
+  state         String?
+  zip           String?
+  
+  // People
+  buyerName     String?
+  sellerName    String?
+  
+  // Dates
+  contractDate  DateTime?
+  effectiveDate DateTime?
+  closingDate   DateTime?
+  possessionDate DateTime?
+  earnestMoneyDueDate DateTime?
+  
+  // Financials
+  purchasePrice Float?
+  earnestMoneyAmount Float?
+  
+  // Service Providers
+  titleCompany      String?
+  closingCompany    String?
+  closingAgentName  String?
+  
+  // Other
+  includedItems String? // Stored as JSON string or comma-separated
+  
+  stage         String    @default("Intake") // Intake, Under Contract, Closed
+  progress      Int       @default(0)
+  userId        String
+  parsedSummary Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  tasks         Task[]
+
+  @@index([userId])
+}
+
+model Task {
+  id            String      @id @default(cuid())
+  title         String
+  dueDate       DateTime?
+  status        String      @default("upcoming") // upcoming, overdue, completed
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+// Raw uploaded documents (stored per-user, not shared)
+model Document {
+  id         String   @id @default(cuid())
+  userId     String
+  filename   String
+  mimeType   String
+  size       Int
+  data       Bytes
+  createdAt  DateTime @default(now())
+  transactionId String? // optional link to transaction if needed later
+
+  @@index([userId])
+}
+
+// Task templates per user
+model Template {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  createdAt DateTime @default(now())
+  items     TemplateItem[]
+
+  @@index([userId])
+}
+
+model Project {
+  id         String       @id @default(cuid())
+  userId     String
+  name       String
+  summary    Json?
+  isPrimary  Boolean      @default(false)
+  status     String       @default("active") // active or completed
+  myClientRole MyClientRole?
+  representation RepresentationRole?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  tasks      ProjectTask[]
+  contacts   ProjectContact[]
+
+  @@index([userId])
+}
+
+model ProjectTask {
+  id         String    @id @default(cuid())
+  title      String
+  dueDate    DateTime?
+  status     String    @default("upcoming")
+  tags       String?
+  notes      String?
+  priority   Boolean   @default(false)
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model UserToken {
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String
+  accessToken  String
+  refreshToken String
+  scope        String?
+  expiresAt    DateTime?
+  tokenType    String?
+  googleAccessToken String?
+  googleRefreshToken String?
+  googleTokenExpiry  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, provider])
+  @@unique([userId, provider])
+}
+
+model CalendarSync {
+  id             String   @id @default(cuid())
+  userId         String
+  provider       String   @default("google")
+  kind           String   // "project" | "transaction"
+  taskId         String
+  calendarId     String   @default("primary")
+  eventId        String
+  htmlLink       String?
+  reminderMinutes Int?
+  reminderMethod  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, provider])
+  @@unique([userId, provider, kind, taskId])
+}
+
+model Contact {
+  id              String            @id @default(cuid())
+  userId          String
+  firstName       String
+  lastName        String?
+  email           String?
+  phone           String?
+  category        ContactCategory   @default(OTHER)
+  company         String?
+  role            String?
+  notes           String?
+  source          String            // "gmail" | "internal"
+  avatarUrl       String?
+  lastInteraction DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  projectLinks    ProjectContact[]
+
+  @@index([userId, email])
+  @@index([userId, category])
+  @@index([userId, source])
+  @@unique([userId, email])
+}
+
+enum ContactCategory {
+  AGENT
+  CLIENT
+  ESCROW
+  VENDOR
+  LENDER
+  TITLE
+  OTHER
+}
+
+model ProjectContact {
+  id         String           @id @default(cuid())
+  projectId  String
+  contactId  String
+  role       StakeholderRole
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contact    Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, contactId, role])
+  @@index([projectId, role])
+  @@index([contactId, role])
+  @@index([contactId])
+  @@index([projectId])
+}
+
+enum StakeholderRole {
+  BUYER
+  SELLER
+  BUYER_AGENT
+  SELLER_AGENT
+  ESCROW
+  VENDOR
+  LENDER
+  TITLE
+  OTHER
+}
+
+enum MyClientRole {
+  BUYER
+  SELLER
+}
+
+enum RepresentationRole {
+  BUYER
+  SELLER
+}
+
+model EmailTemplate {
+  id          String           @id @default(cuid())
+  name        String
+  category    TemplateCategory
+  description String?
+  subject     String
+  body        String
+  favorite    Boolean          @default(false)
+  tags        String?
+  version     Int              @default(1)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  versions    EmailTemplateVersion[]
+}
+
+model EmailTemplateVersion {
+  id              String   @id @default(cuid())
+  templateId      String
+  version         Int
+  subject         String
+  body            String
+  createdAt       DateTime @default(now())
+
+  template        EmailTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, version])
+  @@index([templateId])
+}
+
+enum TemplateCategory {
+  BUYER
+  SELLER
+  AGENT
+  ESCROW
+  LENDER
+  GENERAL
+}
+
+model TemplateItem {
+  id          String   @id @default(cuid())
+  templateId  String
+  title       String
+  status      String   @default("upcoming")
+  // days offset from an anchor date when applying template; nullable means no due date
+  dueOffsetDays Int?
+
+  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+}

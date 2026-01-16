@@ -1,0 +1,7 @@
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Jira">
+  <rect width="48" height="48" rx="10" fill="#EFF5FF"/>
+  <path d="M16 24L24 16L32 24L24 32L16 24Z" fill="#0052CC"/>
+  <path d="M20 24L24 20L28 24L24 28L20 24Z" fill="white" opacity="0.9"/>
+  <path d="M12 24L24 12L36 24L24 36L12 24Z" stroke="#0C61DA" stroke-width="2" stroke-linejoin="round"/>
+</svg>
+

@@ -1,0 +1,7 @@
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ClickUp">
+  <rect width="48" height="48" rx="10" fill="#FDF4FF"/>
+  <path d="M12 16L24 7L36 16" stroke="#7B3AED" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M15 33C17.6667 35 20.3333 36 23 36C25.6667 36 28.3333 35 31 33" stroke="#FB7185" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M18 28C19.5 29 21 29.5 23 29.5C25 29.5 26.5 29 28 28" stroke="#2563EB" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+

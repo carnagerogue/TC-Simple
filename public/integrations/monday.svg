@@ -1,0 +1,7 @@
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Monday.com">
+  <rect width="48" height="48" rx="10" fill="#FFF9ED"/>
+  <rect x="12" y="15" width="8" height="20" rx="4" transform="rotate(-30 12 15)" fill="#F97316"/>
+  <rect x="20" y="15" width="8" height="20" rx="4" transform="rotate(-30 20 15)" fill="#84CC16"/>
+  <rect x="28" y="15" width="8" height="20" rx="4" transform="rotate(-30 28 15)" fill="#3B82F6"/>
+</svg>
+
