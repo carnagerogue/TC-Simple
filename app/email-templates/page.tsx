@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { TemplateModal } from "@/components/email-templates/TemplateModal";
 import { TemplateCategory } from "@prisma/client";
 
-// Defined local type to match Prisma's output while handling optional fields
+// Clean Type definition
 type Template = {
   id: string;
   name: string;
@@ -27,12 +27,14 @@ export default function EmailTemplatesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Template | null>(null);
 
-  const fetchTemplates = async () => {
+  // Senior Fix: Memoize fetchTemplates using useCallback to fix the dependency warning
+  const fetchTemplates = useCallback(async () => {
     setLoading(true);
     setError(null);
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     if (category !== "ALL") params.set("category", category);
+    
     try {
       const res = await fetch(`/api/email-templates?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load templates");
@@ -44,21 +46,25 @@ export default function EmailTemplatesPage() {
         : [];
       setTemplates(list);
     } catch (e: unknown) {
-      const error = e as { message?: string };
-      setError(error.message || "Unable to load templates");
+      const errorMsg = e instanceof Error ? e.message : "Unable to load templates";
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
-  };
+  }, [q, category]); // These are the reactive dependencies
 
   useEffect(() => {
+    // Initial load and category changes
     fetchTemplates();
-  }, [category]);
+  }, [fetchTemplates]); // Now safely includes the memoized function
 
   useEffect(() => {
-    const handle = setTimeout(() => fetchTemplates(), 250);
+    // Search debouncing logic
+    const handle = setTimeout(() => {
+      if (q) fetchTemplates();
+    }, 250);
     return () => clearTimeout(handle);
-  }, [q]);
+  }, [q, fetchTemplates]);
 
   const filtered = useMemo(() => {
     if (!Array.isArray(templates)) return [];
@@ -79,6 +85,18 @@ export default function EmailTemplatesPage() {
     const res = await fetch(`/api/email-templates/${tmpl.id}`, { method: "DELETE" });
     if (res.ok) fetchTemplates();
   };
+
+  // Senior Fix: Safely transform Template | null to TemplateModal's expected type
+  // This removes the 'any' error and handles the null-to-undefined conversion properly
+  const modalInitialData = useMemo(() => {
+    if (!editing) return undefined;
+    
+    return {
+      ...editing,
+      description: editing.description ?? undefined,
+      tags: editing.tags ?? undefined,
+    };
+  }, [editing]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
@@ -191,8 +209,7 @@ export default function EmailTemplatesPage() {
 
       <TemplateModal
         open={modalOpen}
-        /* Fix: Cast 'editing' to 'any' or provide a fallback to satisfy strict Modal props */
-        initial={(editing as any) || undefined}
+        initial={modalInitialData}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);
