@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     // 1. Initialize the 'where' object with the correct Prisma Type
     const where: Prisma.EmailTemplateWhereInput = {};
 
-    // 2. The Fix: Safely handle the Enum type casting
+    // 2. Safely handle the Enum type casting for category
     if (category) {
       const upperCategory = category.toUpperCase();
       
@@ -25,15 +25,17 @@ export async function GET(request: Request) {
       }
     }
 
-    // 3. Handle other filters
+    // 3. Handle favorite filter
     if (favorite === "true") {
       where.favorite = true;
     }
 
+    // 4. Handle search query
+    // NOTE: With SQLite Prisma, `mode: "insensitive"` is not supported in typings and will fail `next build`.
     if (q) {
       where.OR = [
-        { name: { contains: q, mode: 'insensitive' } },
-        { subject: { contains: q, mode: 'insensitive' } },
+        { name: { contains: q } },
+        { subject: { contains: q } },
       ];
     }
 
