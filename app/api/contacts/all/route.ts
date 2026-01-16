@@ -2,31 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import db from "@/lib/db";
+import { Prisma, ContactCategory } from "@prisma/client";
 
 const VALID_CATEGORIES = ["AGENT", "CLIENT", "ESCROW", "VENDOR", "LENDER", "TITLE", "OTHER"] as const;
 type Category = (typeof VALID_CATEGORIES)[number];
-
-type ContactWhere = {
-  userId: string;
-  category?: string;
-  OR?: Array<
-    | { firstName: { contains: string; mode: "insensitive" } }
-    | { lastName: { contains: string; mode: "insensitive" } }
-    | { email: { contains: string; mode: "insensitive" } }
-    | { phone: { contains: string; mode: "insensitive" } }
-    | { company: { contains: string; mode: "insensitive" } }
-    | { role: { contains: string; mode: "insensitive" } }
-  >;
-};
 
 function buildWhere(userId: string, searchParams: URLSearchParams) {
   const q = searchParams.get("q")?.trim();
   const category = searchParams.get("category")?.toUpperCase();
 
-  const where: ContactWhere = { userId };
+  const where: Prisma.ContactWhereInput = { userId };
 
   if (category && VALID_CATEGORIES.includes(category as Category)) {
-    where.category = category;
+    where.category = category as ContactCategory;
   }
 
   if (q) {
