@@ -23,8 +23,9 @@ export async function POST(request: NextRequest) {
         method: "POST",
         body: outbound,
       });
-    } catch (err: any) {
-      console.error("Parser request failed to connect:", err?.message || err);
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      console.error("Parser request failed to connect:", error.message || err);
       return NextResponse.json(
         { error: `Parser request failed to connect. Ensure PARSER_URL (${parserUrl}) is reachable.` },
         { status: 502 },

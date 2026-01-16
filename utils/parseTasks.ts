@@ -13,7 +13,7 @@ export function parseTasks(tasks: unknown): ParsedTaskItem[] {
     .map((t) => {
       if (typeof t === "string") return t.trim();
       if (t && typeof t === "object" && "title" in t) {
-        const title = (t as any).title;
+        const title = (t as { title?: unknown }).title;
         return typeof title === "string" ? title.trim() : "";
       }
       return "";

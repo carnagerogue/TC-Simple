@@ -8,7 +8,10 @@ export async function GET(_req: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const userId = (session.user as any).id || session.user.email!;
+  const userId = session.user.id || session.user.email;
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const tasks = await db.projectTask.findMany({
     where: {
@@ -32,7 +35,7 @@ export async function GET(_req: NextRequest) {
       title: t.title,
       dueDate: t.dueDate,
       status: t.status,
-      tags: (t as any).tags || null,
+      tags: t.tags || null,
       projectId: t.projectId,
       projectName: t.project.name,
     })),

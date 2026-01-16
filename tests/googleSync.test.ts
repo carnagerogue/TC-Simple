@@ -16,12 +16,14 @@ type UserTokenRow = {
   googleTokenExpiry?: Date | null;
 };
 
+type UpsertArgs = { create: Partial<UserTokenRow>; update: Partial<UserTokenRow> };
+
 function makeDb(tokens: UserTokenRow) {
   let saved: UserTokenRow | null = tokens;
   return {
     userToken: {
       findFirst: async () => saved,
-      upsert: async ({ create, update }: any) => {
+      upsert: async ({ create, update }: UpsertArgs) => {
         saved = { ...(saved || {}), ...create, ...update } as UserTokenRow;
         return saved;
       },

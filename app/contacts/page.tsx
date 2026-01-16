@@ -41,8 +41,9 @@ export default function ContactsPage() {
       if (!res.ok) throw new Error("Failed to load contacts");
       const data = await res.json();
       setContacts(data.contacts || []);
-    } catch (e: any) {
-      setError(e.message || "Unable to load contacts");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      setError(error.message || "Unable to load contacts");
     } finally {
       setLoading(false);
     }
@@ -194,8 +195,9 @@ export default function ContactsPage() {
                   setSyncMessage(
                     `Gmail contacts synced successfully. Fetched ${body.fetched ?? body.synced ?? 0}, created ${body.created ?? 0}, updated ${body.updated ?? 0}.`
                   );
-                } catch (e: any) {
-                  setError(e.message || "Unable to sync Gmail contacts");
+                } catch (e: unknown) {
+                  const error = e as { message?: string };
+                  setError(error.message || "Unable to sync Gmail contacts");
                 } finally {
                   setSyncing(false);
                 }

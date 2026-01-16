@@ -3,12 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { validatePlaceholders, parseTags, tagsToString } from "@/lib/emailTemplates";
-import { TemplateCategory } from "@prisma/client";
+import { Prisma, TemplateCategory } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const userId = (session.user as any).id || session.user.email!;
+  const userId = session.user.id || session.user.email;
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") || "";
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
   const favorite = searchParams.get("favorite") === "true";
   const statsOnly = searchParams.get("stats") === "true";
 
-  const where: any = {};
+  const where: Prisma.EmailTemplateWhereInput = {};
   if (category) where.category = category.toUpperCase();
   if (favorite) where.favorite = true;
   if (q) {

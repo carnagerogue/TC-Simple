@@ -62,13 +62,13 @@ export async function POST(request: NextRequest) {
 
     // Create Transaction in DB
     try {
-      const safeDate = (dateStr: any) => {
+      const safeDate = (dateStr: unknown) => {
         if (!dateStr) return null;
         const d = new Date(dateStr);
         return isNaN(d.getTime()) ? null : d;
       };
 
-      const safeFloat = (val: any) => {
+      const safeFloat = (val: unknown) => {
         if (typeof val === "number") return val;
         if (typeof val === "string") {
           const parsed = parseFloat(val.replace(/[^0-9.]/g, ""));

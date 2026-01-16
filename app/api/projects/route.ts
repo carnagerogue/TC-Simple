@@ -4,40 +4,66 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { buildTasksFromItems } from "@/lib/projectTaskTemplates";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function coerceStringOrStringArray(value: unknown): string | string[] {
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v));
+  }
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  return String(value);
+}
+
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { name, items, tasks: providedTasks, transactionId, documentId } = body ?? {};
+  const body = (await request.json().catch(() => null)) as unknown;
+  const payload = isRecord(body) ? body : {};
+  const name = payload.name;
+  const items = payload.items;
+  const providedTasks = payload.tasks;
+  const transactionId = payload.transactionId;
+  const documentId = payload.documentId;
 
-  if (!name) {
+  if (typeof name !== "string" || !name.trim()) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
 
-  const userId = (session.user as any).id || session.user.email!;
+  const userId = session.user.id || session.user.email;
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   // Normalize items to record summary
-  const summary: Record<string, any> = {};
+  const summary: Record<string, unknown> = {};
+  const normalizedItems: Array<{ field: string; value: string | string[] }> = [];
+
   if (Array.isArray(items)) {
-    items.forEach((item: any) => {
-      if (item?.field) {
-        summary[item.field] = item.value;
-      }
+    items.forEach((item) => {
+      if (!isRecord(item)) return;
+      const field = item.field;
+      if (typeof field !== "string" || !field) return;
+      const value = coerceStringOrStringArray(item.value);
+      normalizedItems.push({ field, value });
+      summary[field] = value;
     });
   }
-  if (typeof transactionId === "string" && transactionId) {
+  if (typeof transactionId === "string" && transactionId.trim()) {
     summary["transactionId"] = transactionId;
   }
-  if (typeof documentId === "string" && documentId) {
+  if (typeof documentId === "string" && documentId.trim()) {
     summary["documentId"] = documentId;
   }
 
   const project = await db.project.create({
     data: {
-      name,
+      name: name.trim(),
       userId,
       summary,
     },
@@ -52,16 +78,33 @@ export async function POST(request: NextRequest) {
   }[] = [];
 
   if (Array.isArray(providedTasks) && providedTasks.length > 0) {
-    tasksToCreate = providedTasks.map((t: any) => ({
-      title: t.title,
-      status: t.status || "upcoming",
-      dueDate: t.dueDate ? new Date(t.dueDate) : null,
-      tags: t.tags ?? null,
-      projectId: project.id,
-    }));
-  } else if (Array.isArray(items) && items.length > 0) {
+    tasksToCreate = providedTasks
+      .map((t) => (isRecord(t) ? t : null))
+      .filter(Boolean)
+      .map((t) => {
+        const title = typeof t.title === "string" ? t.title : "";
+        const status = typeof t.status === "string" ? t.status : "upcoming";
+        const tags = typeof t.tags === "string" ? t.tags : null;
+        const dueDateRaw = t.dueDate;
+        const dueDate =
+          typeof dueDateRaw === "string" || typeof dueDateRaw === "number"
+            ? new Date(dueDateRaw)
+            : dueDateRaw instanceof Date
+            ? dueDateRaw
+            : null;
+        const safeDueDate = dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null;
+        return {
+          title,
+          status,
+          dueDate: safeDueDate,
+          tags,
+          projectId: project.id,
+        };
+      })
+      .filter((t) => t.title.trim().length > 0);
+  } else if (normalizedItems.length > 0) {
     tasksToCreate = buildTasksFromItems(
-      items.map((item: any) => ({
+      normalizedItems.map((item) => ({
         field: item.field,
         value: item.value,
       }))
