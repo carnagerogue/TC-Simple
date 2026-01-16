@@ -30,12 +30,12 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // 2. The Fix: Use a type predicate (item is Record<string, any>) 
-  // to tell TypeScript that 'item' is not null after filtering.
+  // 2. The Fix: Replace 'any' with 'unknown' to satisfy ESLint 
+  // and use a type predicate to remove the 'null' possibility.
   if (Array.isArray(tasks)) {
     const tasksToCreate = tasks
       .map((t) => (isRecord(t) ? t : null))
-      .filter((item): item is Record<string, any> => item !== null) // Explicit Type Guard
+      .filter((item): item is Record<string, unknown> => item !== null) 
       .map((item) => ({
         title: typeof item.title === "string" ? item.title : "",
         status: typeof item.status === "string" ? item.status : "upcoming",
