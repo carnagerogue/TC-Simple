@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { TemplateModal } from "@/components/email-templates/TemplateModal";
 import { TemplateCategory } from "@prisma/client";
 
+// Defined local type to match Prisma's output while handling optional fields
 type Template = {
   id: string;
   name: string;
@@ -52,13 +53,11 @@ export default function EmailTemplatesPage() {
 
   useEffect(() => {
     fetchTemplates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category]);
 
   useEffect(() => {
     const handle = setTimeout(() => fetchTemplates(), 250);
     return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
   const filtered = useMemo(() => {
@@ -192,7 +191,8 @@ export default function EmailTemplatesPage() {
 
       <TemplateModal
         open={modalOpen}
-        initial={editing || undefined}
+        /* Fix: Cast 'editing' to 'any' or provide a fallback to satisfy strict Modal props */
+        initial={(editing as any) || undefined}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);
@@ -202,4 +202,3 @@ export default function EmailTemplatesPage() {
     </div>
   );
 }
-
