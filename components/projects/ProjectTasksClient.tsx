@@ -17,13 +17,15 @@ type Task = {
   status: string;
   tags?: string | null;
   notes?: string | null;
+  description?: string | null;
+  template?: string | null;
   priority?: boolean;
 };
 
 type Project = {
   id: string;
   name: string;
-  summary: Record<string, any> | null;
+  summary: Record<string, string | number | null | undefined> | null;
   myClientRole?: "BUYER" | "SELLER" | null;
 };
 
@@ -72,11 +74,15 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
         body: JSON.stringify({ role }),
         credentials: "include",
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as {
+        myClientRole?: "BUYER" | "SELLER" | null;
+        hasStakeholder?: boolean;
+        error?: string;
+      };
       if (!res.ok) {
         throw new Error(data.error || "Unable to update client");
       }
-      setMyClientRole((data as any).myClientRole ?? role);
+      setMyClientRole(data.myClientRole ?? role);
       if (!data.hasStakeholder) {
         setClientWarning(`No ${role === "BUYER" ? "buyer" : "seller"} stakeholder added yet. Add one to route emails.`);
       } else {
@@ -100,11 +106,11 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
       const candidates = stakeholders.filter((s) => s.role === role);
       if (!candidates.length) return null;
       if (role === "BUYER" || role === "SELLER") {
-        const client = candidates.find((c) => (c.contact as any)?.category === "CLIENT");
+        const client = candidates.find((c) => c.contact.category === "CLIENT");
         if (client) return client;
       }
       if (role === "BUYER_AGENT" || role === "SELLER_AGENT") {
-        const agent = candidates.find((c) => (c.contact as any)?.category === "AGENT");
+        const agent = candidates.find((c) => c.contact.category === "AGENT");
         if (agent) return agent;
       }
       return candidates[0];
@@ -128,7 +134,7 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
         match = pickBest(fallbackRole);
         if (match) {
           const name = [match.contact.firstName, match.contact.lastName].filter(Boolean).join(" ");
-          return { email: match.contact.email, name: name || match.contact.email || "", role: fallbackRole as any };
+          return { email: match.contact.email, name: name || match.contact.email || "", role: fallbackRole };
         }
       }
     }
@@ -136,9 +142,9 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
     // Fallback by contact category when role not assigned (e.g., escrow/lender stored only as category)
     if (!match) {
       if (normalized === "ESCROW") {
-        match = stakeholders.find((s) => (s.contact as any)?.category === "ESCROW");
+        match = stakeholders.find((s) => s.contact.category === "ESCROW");
       } else if (normalized === "LENDER") {
-        match = stakeholders.find((s) => (s.contact as any)?.category === "LENDER");
+        match = stakeholders.find((s) => s.contact.category === "LENDER");
       }
     }
     if (match) {
@@ -165,8 +171,8 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
   const openDraftForTask = (task: Task) => {
     const rec = findRecipientForTask(task);
     const roleLabel = recipientLabel(task) || undefined;
-    const baseTemplate = (task as any).template || (task as any).description || (task as any).notes || "";
-    const rendered = renderTemplate(baseTemplate || task.title, { summary: project.summary, myClientRole }, stakeholders as any);
+    const baseTemplate = task.template || task.description || task.notes || "";
+    const rendered = renderTemplate(baseTemplate || task.title, { summary: project.summary, myClientRole }, stakeholders);
     const roleTag = extractRoleFromTags(task.tags);
     setDraftModal({
       open: true,
@@ -185,7 +191,7 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
         if (!res.ok) return;
         const data = await res.json();
         setStakeholders(data.stakeholders || []);
-        setMyClientRole(data.myClientRole ?? myClientRole);
+        setMyClientRole(data.myClientRole ?? null);
       } catch (_) {
         // ignore
       }

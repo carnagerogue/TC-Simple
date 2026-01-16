@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useCallback, DragEvent, useRef, useEffect } from "react";
+import { useState, useCallback, DragEvent, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ParsedItemCard } from "@/components/ParsedItemCard";
-import { ProjectCreateModal } from "@/components/ProjectCreateModal";
-import { ParsedTaskItem } from "@/utils/parseTasks";
 import { labelForField } from "@/lib/projectTaskTemplates";
 
 type UploadStatus =
@@ -20,6 +18,13 @@ type ParsedItem = {
   label: string;
   value: string | string[];
   selected: boolean;
+};
+
+type ParserResponse = {
+  fields?: Record<string, unknown>;
+  extracted?: Record<string, unknown>;
+  tasks?: string[];
+  choices?: Array<{ message?: { content?: string } }>;
 };
 
 function normalizeValue(field: string, value: unknown): string | string[] {
@@ -68,15 +73,10 @@ export function UploadForm() {
   const [status, setStatus] = useState<UploadStatus>(initialStatus);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(null);
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
-  const [parsedTasks, setParsedTasks] = useState<ParsedTaskItem[]>([]);
   const [parsedItems, setParsedItems] = useState<ParsedItem[]>([]);
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [ctaHighlight, setCtaHighlight] = useState(false);
   const parsedSectionRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
@@ -129,17 +129,15 @@ export function UploadForm() {
 
     setIsUploading(true);
     setStatus({ type: "loading", message: "" });
-    setParsedData(null);
     setTransactionId(null);
     setDocumentId(null);
-    setParsedTasks([]);
     setParsedItems([]);
 
     try {
       // Call FastAPI parser first
-      const parsed = await uploadToParser(file);
+      const parsed = (await uploadToParser(file)) as ParserResponse;
       // handle raw OpenAI-like response with choices or wrapped fields
-      let extracted = parsed?.fields ?? parsed?.extracted ?? parsed ?? null;
+      let extracted: Record<string, unknown> | null = parsed.fields ?? parsed.extracted ?? null;
       if (!extracted && parsed?.choices) {
         const raw = parsed.choices?.[0]?.message?.content ?? "";
         try {
@@ -148,9 +146,7 @@ export function UploadForm() {
           extracted = null;
         }
       }
-      const tasks = (parsed?.tasks as string[]) ?? [];
-      setParsedData(extracted);
-      setParsedItems(buildParsedItems(extracted as any));
+      setParsedItems(buildParsedItems(extracted));
 
       const formData = new FormData();
       formData.append("file", file);
@@ -180,11 +176,10 @@ export function UploadForm() {
       setTransactionId(payload.transactionId ?? null);
       setDocumentId(payload.documentId ?? null);
       const parsedSource = extracted || payload.parsedData || null;
-      setParsedData(parsedSource);
       if (payload.documentId) {
         setPreviewUrl(`/api/documents/${payload.documentId}`);
       }
-      setParsedItems(buildParsedItems(parsedSource as any));
+      setParsedItems(buildParsedItems(parsedSource));
       setTimeout(() => {
         parsedSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 150);

@@ -1,6 +1,4 @@
 "use server";
-
-import { google } from "googleapis";
 import { db } from "@/lib/db";
 import { ensureGoogleAccessToken } from "@/lib/google/refreshGoogleToken";
 

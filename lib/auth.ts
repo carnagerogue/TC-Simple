@@ -43,56 +43,6 @@ type SessionExtras = {
   google?: { scopes: string[] };
 };
 
-const refreshAccessToken = async (token: JWT) => {
-  const tokenWithExtras = token as JWT & TokenExtras;
-  try {
-    const refreshToken = tokenWithExtras.refreshToken || token.refresh_token;
-    if (!refreshToken) {
-      throw new Error("Missing refresh token");
-    }
-
-    const response = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: requiredEnv("GOOGLE_CLIENT_ID"),
-        client_secret: requiredEnv("GOOGLE_CLIENT_SECRET"),
-        grant_type: "refresh_token",
-        refresh_token: refreshToken as string,
-      }),
-    });
-
-    const data = (await response.json()) as {
-      access_token?: string;
-      refresh_token?: string;
-      expires_in?: number;
-      token_type?: string;
-      scope?: string;
-      error?: string;
-    };
-
-    if (!response.ok) {
-      throw new Error(data.error ?? "Failed to refresh Google access token.");
-    }
-
-    return {
-      ...token,
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? refreshToken,
-      expiresAt: Date.now() + Number(data.expires_in) * 1000,
-      tokenType: data.token_type ?? tokenWithExtras.tokenType,
-      access_token: data.access_token,
-      refresh_token: data.refresh_token ?? refreshToken,
-      expires_at: Math.floor(Date.now() / 1000 + Number(data.expires_in)),
-      scope: data.scope ?? tokenWithExtras.scope,
-      error: undefined,
-    };
-  } catch (error) {
-    console.error("Error refreshing Google access token:", error);
-    return { ...token, error: "RefreshAccessTokenError" as const };
-  }
-};
-
 const googleClientId = requiredEnv("GOOGLE_CLIENT_ID");
 const googleClientSecret = requiredEnv("GOOGLE_CLIENT_SECRET");
 
