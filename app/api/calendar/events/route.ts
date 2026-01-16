@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
   try {
     const event = await calendar.events.insert({
       calendarId: "primary",
+      sendUpdates: "all",
       requestBody: {
         summary: payload.summary,
         description: payload.description,
@@ -47,7 +48,6 @@ export async function POST(request: NextRequest) {
         start: { dateTime: payload.start },
         end: { dateTime: payload.end },
         attendees: payload.attendees?.map((email) => ({ email })),
-        sendUpdates: "all",
       },
     });
 
