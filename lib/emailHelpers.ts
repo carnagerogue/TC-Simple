@@ -53,7 +53,8 @@ export function normalizeRoleToStakeholder(role?: string | null): StakeholderRol
 
 type ContactLike = { firstName?: string | null; lastName?: string | null; email?: string | null; phone?: string | null };
 type StakeholderLike = { role: StakeholderRole; contact: ContactLike };
-type ProjectLike = { summary?: Record<string, any> | null; myClientRole?: StakeholderRole | "BUYER" | "SELLER" | null };
+type ProjectSummary = Record<string, string | number | null | undefined>;
+type ProjectLike = { summary?: ProjectSummary | null; myClientRole?: StakeholderRole | "BUYER" | "SELLER" | null };
 
 export function renderTemplate(template: string, project: ProjectLike, stakeholders: StakeholderLike[]) {
   const map = new Map<StakeholderRole, ContactLike>();
@@ -81,7 +82,7 @@ export function renderTemplate(template: string, project: ProjectLike, stakehold
     .replaceAll("{sellerAgentName}", getName("SELLER_AGENT"))
     .replaceAll("{escrowEmail}", getEmail("ESCROW"))
     .replaceAll("{lenderPhone}", getPhone("LENDER"))
-    .replaceAll("{myClientName}", getName(project.myClientRole as any))
+    .replaceAll("{myClientName}", getName(project.myClientRole ?? null))
     .replaceAll("{propertyAddress}", address || "");
 }
 

@@ -8,21 +8,6 @@ export type GeneratedTask = {
   tags?: string;
 };
 
-function addTags(base: string, extra: string) {
-  const set = new Set(
-    base
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-  );
-  extra
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .forEach((t) => set.add(t));
-  return Array.from(set).join(", ");
-}
-
 export function generateTasksFromParsed(items: ParsedFieldItem[]): GeneratedTask[] {
   const lookup = Object.fromEntries(items.map((i) => [i.field, i.value]));
   const tasks: GeneratedTask[] = [];

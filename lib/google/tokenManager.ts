@@ -11,18 +11,7 @@ type StoredTokens = {
   expiresAt?: Date | null;
 };
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.NEXT_PUBLIC_BASE_URL ||
-    process.env.NEXTAUTH_URL ||
-    "http://localhost:3000/api/auth/callback/google"
-);
-
-function isExpired(expiresAt?: Date | null) {
-  if (!expiresAt) return true;
-  return Date.now() > expiresAt.getTime() - 60_000; // 1 minute skew
-}
+// OAuth client setup is handled in refreshGoogleToken; no local client needed here.
 
 export async function getStoredTokens(
   userId: string,

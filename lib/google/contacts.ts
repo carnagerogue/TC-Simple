@@ -22,6 +22,10 @@ type PeopleConnection = {
   resourceName?: string;
 };
 
+type PeopleConnectionsResponse = {
+  connections?: PeopleConnection[];
+};
+
 function splitName(displayName?: string): { firstName: string; lastName?: string } {
   if (!displayName) return { firstName: "Unknown" };
   const parts = displayName.trim().split(/\s+/);
@@ -39,8 +43,8 @@ export function inferCategory(orgName?: string | null, title?: string | null): C
   return "OTHER";
 }
 
-export function normalizePeopleConnections(data: any): NormalizedContact[] {
-  const connections: PeopleConnection[] = data.connections || [];
+export function normalizePeopleConnections(data: PeopleConnectionsResponse): NormalizedContact[] {
+  const connections: PeopleConnection[] = data.connections ?? [];
   return connections
     .map((person) => {
       const names = person.names?.[0];

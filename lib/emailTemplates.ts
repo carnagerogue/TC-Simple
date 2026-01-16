@@ -60,28 +60,40 @@ export function filterTemplatesByCategory(
 
 export function renderTemplate(
   template: string,
-  project: { summary?: Record<string, any> | null; myClientRole?: any },
-  stakeholders: Array<{ role: string; contact: { firstName?: string | null; lastName?: string | null; email?: string | null; phone?: string | null; company?: string | null } }>,
+  project: { summary?: Record<string, string | number | null | undefined> | null; myClientRole?: string | null },
+  stakeholders: Array<{
+    role: string;
+    contact: {
+      firstName?: string | null;
+      lastName?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      company?: string | null;
+      category?: string | null;
+    };
+  }>,
 ) {
-  const map = new Map<string, any>();
+  const map = new Map<string, (typeof stakeholders)[number]["contact"]>();
   stakeholders.forEach((s) => {
     if (!map.has(s.role)) map.set(s.role, s.contact);
   });
   const byCategory = (category: string) =>
     stakeholders.find(
-      (s) => (s.role || "").toUpperCase() === category || (s.contact as any)?.category === category,
+      (s) =>
+        (s.role || "").toUpperCase() === category ||
+        (s.contact?.category || "").toUpperCase() === category,
     )?.contact;
   const getByRoleOrCategory = (role: string, category?: string) => map.get(role) || (category ? byCategory(category) : null);
 
   const summary = project.summary || {};
   const getName = (role?: string | null) => {
     if (!role) return "";
-    const contact = map.get(role) as any;
+    const contact = map.get(role);
     return [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") || "";
   };
-  const getEmail = (role?: string | null) => (role ? (map.get(role) as any)?.email || "" : "");
-  const getPhone = (role?: string | null) => (role ? (map.get(role) as any)?.phone || "" : "");
-  const getCompany = (role?: string | null) => (role ? (map.get(role) as any)?.company || "" : "");
+  const getEmail = (role?: string | null) => (role ? map.get(role)?.email || "" : "");
+  const getPhone = (role?: string | null) => (role ? map.get(role)?.phone || "" : "");
+  const getCompany = (role?: string | null) => (role ? map.get(role)?.company || "" : "");
   const address =
     summary["property_address"] ||
     [summary["property_city"], summary["property_state"], summary["property_zip"]].filter(Boolean).join(", ");
@@ -111,17 +123,17 @@ export function renderTemplate(
     agentPhone:
       getPhone("BUYER_AGENT") ||
       getPhone("SELLER_AGENT") ||
-      (getByRoleOrCategory("AGENT", "AGENT") as any)?.phone ||
+      getByRoleOrCategory("AGENT", "AGENT")?.phone ||
       "",
     agentEmail:
       getEmail("BUYER_AGENT") ||
       getEmail("SELLER_AGENT") ||
-      (getByRoleOrCategory("AGENT", "AGENT") as any)?.email ||
+      getByRoleOrCategory("AGENT", "AGENT")?.email ||
       "",
     propertyAddress: address || "",
     closingDate: summary["closing_date"] || "",
     contractDate: summary["contract_date"] || "",
-    myClientName: getName(project.myClientRole as any),
+    myClientName: getName(project.myClientRole ?? null),
   };
   return template.replace(/\{([^}]+)\}/g, (_, key) => replacements[key] ?? "");
 }

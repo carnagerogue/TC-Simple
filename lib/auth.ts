@@ -25,9 +25,28 @@ const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
 ].join(" ");
 
+type TokenExtras = {
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  tokenType?: string | null;
+  scope?: string | null;
+};
+
+type SessionExtras = {
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  expiresAt?: number | null;
+  scope?: string | null;
+  tokenType?: string | null;
+  error?: string;
+  google?: { scopes: string[] };
+};
+
 const refreshAccessToken = async (token: JWT) => {
+  const tokenWithExtras = token as JWT & TokenExtras;
   try {
-    const refreshToken = (token as any).refreshToken || (token as any).refresh_token;
+    const refreshToken = tokenWithExtras.refreshToken || token.refresh_token;
     if (!refreshToken) {
       throw new Error("Missing refresh token");
     }
@@ -43,7 +62,14 @@ const refreshAccessToken = async (token: JWT) => {
       }),
     });
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+      token_type?: string;
+      scope?: string;
+      error?: string;
+    };
 
     if (!response.ok) {
       throw new Error(data.error ?? "Failed to refresh Google access token.");
@@ -54,11 +80,11 @@ const refreshAccessToken = async (token: JWT) => {
       accessToken: data.access_token,
       refreshToken: data.refresh_token ?? refreshToken,
       expiresAt: Date.now() + Number(data.expires_in) * 1000,
-      tokenType: data.token_type ?? (token as any).tokenType,
+      tokenType: data.token_type ?? tokenWithExtras.tokenType,
       access_token: data.access_token,
       refresh_token: data.refresh_token ?? refreshToken,
       expires_at: Math.floor(Date.now() / 1000 + Number(data.expires_in)),
-      scope: data.scope ?? (token as any).scope,
+      scope: data.scope ?? tokenWithExtras.scope,
       error: undefined,
     };
   } catch (error) {
@@ -93,17 +119,18 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, account }) {
+      const tokenWithExtras = token as JWT & TokenExtras;
       if (account) {
         // First-time login or re-consent; capture tokens
         const expiresMs =
           (account.expires_at ? account.expires_at * 1000 : undefined) ??
           (account.expires_in ? Date.now() + account.expires_in * 1000 : undefined);
 
-        (token as any).accessToken = account.access_token;
-        (token as any).refreshToken = account.refresh_token ?? (token as any).refreshToken;
-        (token as any).expiresAt = expiresMs ?? (token as any).expiresAt;
-        (token as any).scope = account.scope ?? (token as any).scope;
-        (token as any).tokenType = account.token_type ?? (token as any).tokenType;
+        tokenWithExtras.accessToken = account.access_token;
+        tokenWithExtras.refreshToken = account.refresh_token ?? tokenWithExtras.refreshToken;
+        tokenWithExtras.expiresAt = expiresMs ?? tokenWithExtras.expiresAt;
+        tokenWithExtras.scope = account.scope ?? tokenWithExtras.scope;
+        tokenWithExtras.tokenType = account.token_type ?? tokenWithExtras.tokenType;
 
         token.access_token = account.access_token;
         token.refresh_token = account.refresh_token ?? token.refresh_token;
@@ -160,47 +187,49 @@ export const authOptions: NextAuthOptions = {
       }
 
       // If expired, refresh
-      const expiresAtMs = (token as any).expiresAt || (token.expires_at ? token.expires_at * 1000 : null);
+      const expiresAtMs = tokenWithExtras.expiresAt || (token.expires_at ? token.expires_at * 1000 : null);
       const isExpired = !expiresAtMs || expiresAtMs < Date.now() - 60_000;
       if (!isExpired) {
         return token;
       }
 
       // Refresh flow
-      const refreshToken = (token as any).refreshToken || token.refresh_token;
+      const refreshToken = tokenWithExtras.refreshToken || token.refresh_token;
       if (!refreshToken) return token;
       const refreshed = await refreshGoogleToken(refreshToken);
       const newExpires = Date.now() + Number(refreshed.expires_in) * 1000;
 
-      (token as any).accessToken = refreshed.access_token;
-      (token as any).refreshToken = refreshed.refresh_token ?? refreshToken;
-      (token as any).expiresAt = newExpires;
+      tokenWithExtras.accessToken = refreshed.access_token;
+      tokenWithExtras.refreshToken = refreshed.refresh_token ?? refreshToken;
+      tokenWithExtras.expiresAt = newExpires;
 
       token.access_token = refreshed.access_token;
       token.refresh_token = refreshed.refresh_token ?? refreshToken;
       token.expires_at = Math.floor(newExpires / 1000);
       token.scope = refreshed.scope ?? token.scope;
-      (token as any).tokenType = refreshed.token_type ?? (token as any).tokenType;
+      tokenWithExtras.tokenType = refreshed.token_type ?? tokenWithExtras.tokenType;
       return token;
     },
     async session({ session, token }) {
+      const tokenWithExtras = token as JWT & TokenExtras;
+      const sessionWithExtras = session as typeof session & SessionExtras;
       if (session.user && token.sub) {
         session.user.id = token.sub;
       }
 
       if (token.error) {
-        session.error = token.error;
+        sessionWithExtras.error = token.error;
       }
 
-      session.google = {
+      sessionWithExtras.google = {
         scopes: typeof token.scope === "string" ? token.scope.split(" ") : [],
       };
-      (session as any).accessToken = (token as any).accessToken ?? token.access_token ?? null;
-      (session as any).refreshToken = (token as any).refreshToken ?? token.refresh_token ?? null;
-      (session as any).expiresAt =
-        (token as any).expiresAt ?? (token.expires_at ? token.expires_at * 1000 : null) ?? null;
-      (session as any).scope = (token as any).scope ?? token.scope ?? null;
-      (session as any).tokenType = (token as any).tokenType ?? null;
+      sessionWithExtras.accessToken = tokenWithExtras.accessToken ?? token.access_token ?? null;
+      sessionWithExtras.refreshToken = tokenWithExtras.refreshToken ?? token.refresh_token ?? null;
+      sessionWithExtras.expiresAt =
+        tokenWithExtras.expiresAt ?? (token.expires_at ? token.expires_at * 1000 : null) ?? null;
+      sessionWithExtras.scope = tokenWithExtras.scope ?? token.scope ?? null;
+      sessionWithExtras.tokenType = tokenWithExtras.tokenType ?? null;
 
       return session;
     },
