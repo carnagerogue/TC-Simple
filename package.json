@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node ./node_modules/prisma/build/index.js generate && next build",
-    "postinstall": "node ./node_modules/prisma/build/index.js generate",
+    "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
     "test": "tsx tests/googleSync.test.ts"
