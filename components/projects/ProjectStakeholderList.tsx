@@ -171,7 +171,7 @@ export function ProjectStakeholderList({
     } catch (_) {
       // ignore
     }
-  }, [projectId]);
+  }, []);
 
   useEffect(() => {
     setClientRole(myClientRole ?? null);

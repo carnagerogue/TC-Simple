@@ -15,7 +15,10 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const userId = (session.user as any).id || session.user.email || undefined;
+  const userId = session.user.id || session.user.email || null;
+  if (!userId) {
+    redirect("/login");
+  }
 
   const dbTransactions = await db.transaction.findMany({
     where: {
@@ -44,17 +47,6 @@ export default async function DashboardPage() {
   }));
 
   const primaryTxn = dbTransactions[0];
-  const primaryTasks = primaryTxn
-    ? primaryTxn.tasks.map((t) => ({
-        id: t.id,
-        title: t.title,
-        property: primaryTxn.address,
-        due: t.dueDate
-          ? t.dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-          : "No date",
-        status: (t.status as "upcoming" | "overdue" | "completed") || "upcoming",
-      }))
-    : [];
 
   const primaryDeadlines = primaryTxn
     ? primaryTxn.tasks
@@ -67,17 +59,6 @@ export default async function DashboardPage() {
           status: (t.status as "upcoming" | "overdue" | "completed") || "upcoming",
         }))
     : [];
-
-  const closings = dbTransactions
-    .filter((t) => t.stage === "Closing")
-    .map((t) => ({
-      id: t.id,
-      property: t.address,
-      date: t.effectiveDate
-        ? t.effectiveDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-        : "TBD",
-      progress: t.progress,
-    }));
 
   const primaryProjects = await db.project.findMany({
     where: { userId, isPrimary: true },
@@ -135,11 +116,11 @@ export default async function DashboardPage() {
               title: t.title,
               status: t.status,
               dueDate: t.dueDate ? t.dueDate.toISOString() : null,
-              tags: (t as any).tags || "",
-              notes: (t as any).notes || "",
+              tags: t.tags || "",
+              notes: t.notes || "",
               projectId: t.projectId,
               projectName: t.project.name,
-              priority: (t as any).priority ?? true,
+              priority: t.priority ?? true,
             }))}
           />
         ) : null}

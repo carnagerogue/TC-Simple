@@ -75,8 +75,9 @@ export function AddContactModal({ open, onClose, onSave, initial }: Props) {
         avatarUrl: initial?.avatarUrl || null,
       });
       onClose();
-    } catch (e: any) {
-      setError(e?.message || "Unable to save contact");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      setError(error.message || "Unable to save contact");
     } finally {
       setLoading(false);
     }

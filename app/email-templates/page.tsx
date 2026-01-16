@@ -42,8 +42,9 @@ export default function EmailTemplatesPage() {
         ? data
         : [];
       setTemplates(list);
-    } catch (e: any) {
-      setError(e.message || "Unable to load templates");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      setError(error.message || "Unable to load templates");
     } finally {
       setLoading(false);
     }

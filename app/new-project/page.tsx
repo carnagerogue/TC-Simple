@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ParsedItemCard } from "@/components/ParsedItemCard";
-import { ProjectTaskCard } from "@/components/projects/ProjectTaskCard";
 import { ProjectCreateModal } from "@/components/ProjectCreateModal";
 import { generateTasksFromParsed } from "@/lib/taskGenerator";
 import { labelForField } from "@/lib/projectTaskTemplates";
@@ -87,13 +85,22 @@ export default function NewProjectPage() {
     const stored = typeof window !== "undefined" ? sessionStorage.getItem("tc-simple-new-project") : null;
     if (!stored) return;
     try {
-      const parsed = JSON.parse(stored);
-      const parsedItems: ParsedItem[] = (parsed.items || []).map((p: any) => ({
-        field: p.field,
-        label: p.label || labelForField(p.field),
-        value: p.value,
-        selected: p.selected ?? true,
-      }));
+      const parsed = JSON.parse(stored) as {
+        items?: Array<{ field?: unknown; label?: unknown; value?: unknown; selected?: unknown }>;
+        transactionId?: unknown;
+        documentId?: unknown;
+      };
+      const parsedItems: ParsedItem[] = (parsed.items || [])
+        .filter((p) => p && typeof p === "object")
+        .map((p) => {
+          const field = typeof p.field === "string" ? p.field : "";
+          const label = typeof p.label === "string" ? p.label : labelForField(field);
+          const value =
+            Array.isArray(p.value) ? (p.value as string[]) : typeof p.value === "string" ? p.value : String(p.value ?? "");
+          const selected = typeof p.selected === "boolean" ? p.selected : true;
+          return { field, label, value, selected };
+        })
+        .filter((p) => p.field);
       setItems(parsedItems);
       setSourceTransactionId(typeof parsed.transactionId === "string" ? parsed.transactionId : null);
       setSourceDocumentId(typeof parsed.documentId === "string" ? parsed.documentId : null);

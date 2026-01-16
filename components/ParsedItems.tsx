@@ -12,48 +12,61 @@ export type SuggestedTask = {
 };
 
 type Props = {
-  parsed: any; // expects { extracted: {...}, tasks: [...] }
+  parsed: unknown; // expects { extracted: {...}, tasks: [...] }
   onCreate: (tasks: SuggestedTask[]) => Promise<void> | void;
 };
 
-function buildSuggestedTasks(parsed: any): SuggestedTask[] {
+type ParsedTaskLike = string | { title?: unknown };
+type ParsedPayload = { extracted?: unknown; tasks?: unknown };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function buildSuggestedTasks(parsed: unknown): SuggestedTask[] {
   const tasks: SuggestedTask[] = [];
-  const extracted = parsed?.extracted ?? parsed ?? {};
+  const payload: ParsedPayload = isRecord(parsed) ? (parsed as ParsedPayload) : {};
+  const extractedRaw = payload.extracted ?? parsed;
+  const extracted = isRecord(extractedRaw) ? extractedRaw : {};
   const addTask = (title: string, meta?: string) => {
     if (!title) return;
     tasks.push({ id: nanoid(), title, meta, checked: true });
   };
 
-  if (extracted.buyer_name) addTask(`Record buyer contact: ${extracted.buyer_name}`);
-  if (extracted.seller_name) addTask(`Record seller contact: ${extracted.seller_name}`);
-  if (extracted.property_address)
-    addTask(`Confirm property address: ${extracted.property_address}`, [
-      extracted.property_city,
-      extracted.property_state,
-      extracted.property_zip,
+  const buyerName = typeof extracted.buyer_name === "string" ? extracted.buyer_name : "";
+  const sellerName = typeof extracted.seller_name === "string" ? extracted.seller_name : "";
+  const propertyAddress = typeof extracted.property_address === "string" ? extracted.property_address : "";
+  const contractDate = typeof extracted.contract_date === "string" ? extracted.contract_date : "";
+  const closingDate = typeof extracted.closing_date === "string" ? extracted.closing_date : "";
+  const purchasePrice = typeof extracted.purchase_price === "string" ? extracted.purchase_price : "";
+  const earnestMoney = typeof extracted.earnest_money_amount === "string" ? extracted.earnest_money_amount : "";
+  const earnestDelivery = typeof extracted.earnest_money_delivery_date === "string" ? extracted.earnest_money_delivery_date : undefined;
+  const includedItems = Array.isArray(extracted.included_items) ? extracted.included_items : [];
+
+  if (buyerName) addTask(`Record buyer contact: ${buyerName}`);
+  if (sellerName) addTask(`Record seller contact: ${sellerName}`);
+  if (propertyAddress)
+    addTask(`Confirm property address: ${propertyAddress}`, [
+      typeof extracted.property_city === "string" ? extracted.property_city : "",
+      typeof extracted.property_state === "string" ? extracted.property_state : "",
+      typeof extracted.property_zip === "string" ? extracted.property_zip : "",
     ]
       .filter(Boolean)
       .join(", "));
-  if (extracted.contract_date) addTask(`Record contract date: ${extracted.contract_date}`);
-  if (extracted.closing_date) addTask(`Schedule closing follow-up: ${extracted.closing_date}`);
-  if (extracted.purchase_price)
-    addTask(`Confirm purchase price: ${extracted.purchase_price}`);
-  if (extracted.earnest_money_amount)
-    addTask(
-      `Track earnest money: ${extracted.earnest_money_amount}`,
-      extracted.earnest_money_delivery_date || undefined,
-    );
-  if (Array.isArray(extracted.included_items)) {
-    extracted.included_items.forEach((item: string) => {
-      addTask(`Confirm included item: ${item}`);
+  if (contractDate) addTask(`Record contract date: ${contractDate}`);
+  if (closingDate) addTask(`Schedule closing follow-up: ${closingDate}`);
+  if (purchasePrice) addTask(`Confirm purchase price: ${purchasePrice}`);
+  if (earnestMoney) addTask(`Track earnest money: ${earnestMoney}`, earnestDelivery);
+  if (includedItems.length) {
+    includedItems.forEach((item) => {
+      if (typeof item === "string" && item.trim()) addTask(`Confirm included item: ${item}`);
     });
   }
   // include model-provided tasks if present
-  if (Array.isArray(parsed?.tasks)) {
-    parsed.tasks.forEach((t: any) => {
+  if (Array.isArray(payload.tasks)) {
+    (payload.tasks as ParsedTaskLike[]).forEach((t) => {
       if (typeof t === "string") addTask(t);
-      if (t && typeof t === "object" && "title" in t && typeof t.title === "string")
-        addTask(t.title);
+      if (t && typeof t === "object" && typeof t.title === "string") addTask(t.title);
     });
   }
   return tasks;

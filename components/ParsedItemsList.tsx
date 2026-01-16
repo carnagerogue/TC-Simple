@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 
 interface ParsedItemsListProps {
-  parsed: Record<string, any> | null;
+  parsed: Record<string, unknown> | null;
   selected: string[];
   setSelected: (keys: string[]) => void;
 }
@@ -37,7 +37,7 @@ type CardItem = {
   value: string | string[];
 };
 
-function toCards(parsed: Record<string, any> | null): CardItem[] {
+function toCards(parsed: Record<string, unknown> | null): CardItem[] {
   if (!parsed) return [];
   const cards: CardItem[] = [];
   Object.entries(parsed).forEach(([key, value]) => {
