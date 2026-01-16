@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -10,13 +11,7 @@ export async function GET() {
   }
 
   const userIds = Array.from(
-    new Set(
-      [
-        (session.user as any).id || null,
-        (session.user as any).email || null,
-        session.user.email || null,
-      ].filter(Boolean) as string[]
-    )
+    new Set([session.user.id, session.user.email].filter((v): v is string => typeof v === "string" && v.length > 0))
   );
 
   const [docs, txns, projects] = await Promise.all([
@@ -49,8 +44,11 @@ export async function GET() {
   const projectByTxnId = new Map<string, { id: string; name: string }>();
   const projectByAddress = new Map<string, { id: string; name: string }>();
 
+  const isJsonObject = (value: Prisma.JsonValue | null): value is Prisma.JsonObject =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+
   projects.forEach((p) => {
-    const summary = (p.summary as any) || {};
+    const summary = isJsonObject(p.summary) ? p.summary : {};
     const docId = typeof summary.documentId === "string" ? summary.documentId : null;
     const txnId = typeof summary.transactionId === "string" ? summary.transactionId : null;
     const address =
