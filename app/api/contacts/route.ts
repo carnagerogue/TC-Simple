@@ -46,12 +46,12 @@ function buildWhere(userId: string, searchParams: URLSearchParams) {
 
   if (q) {
     where.OR = [
-      { firstName: { contains: q, mode: "insensitive" } },
-      { lastName: { contains: q, mode: "insensitive" } },
-      { email: { contains: q, mode: "insensitive" } },
-      { phone: { contains: q, mode: "insensitive" } },
-      { company: { contains: q, mode: "insensitive" } },
-      { role: { contains: q, mode: "insensitive" } },
+      { firstName: { contains: q } },
+      { lastName: { contains: q } },
+      { email: { contains: q } },
+      { phone: { contains: q } },
+      { company: { contains: q } },
+      { role: { contains: q } },
     ];
   }
 

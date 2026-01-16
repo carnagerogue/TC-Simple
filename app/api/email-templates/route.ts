@@ -20,9 +20,9 @@ export async function GET(req: NextRequest) {
   if (favorite) where.favorite = true;
   if (q) {
     where.OR = [
-      { name: { contains: q, mode: "insensitive" } },
-      { description: { contains: q, mode: "insensitive" } },
-      { body: { contains: q, mode: "insensitive" } },
+      { name: { contains: q } },
+      { description: { contains: q } },
+      { body: { contains: q } },
     ];
   }
 
