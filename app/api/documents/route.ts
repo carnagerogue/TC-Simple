@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import type { Prisma } from "@prisma/client";
 
 type TxnLite = { id: string; address: string | null; createdAt: Date };
-type ProjectLite = { id: string; name: string; summary: Prisma.JsonValue | null; updatedAt: Date };
+type ProjectLite = { id: string; name: string; summary: unknown; updatedAt: Date };
 type DocLite = {
   id: string;
   filename: string;
@@ -14,6 +13,10 @@ type DocLite = {
   createdAt: Date;
   transactionId: string | null;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -55,11 +58,8 @@ export async function GET() {
   const projectByTxnId = new Map<string, { id: string; name: string }>();
   const projectByAddress = new Map<string, { id: string; name: string }>();
 
-  const isJsonObject = (value: Prisma.JsonValue | null): value is Prisma.JsonObject =>
-    typeof value === "object" && value !== null && !Array.isArray(value);
-
   projects.forEach((p) => {
-    const summary = isJsonObject(p.summary) ? p.summary : {};
+    const summary = isRecord(p.summary) ? p.summary : {};
     const docId = typeof summary.documentId === "string" ? summary.documentId : null;
     const txnId = typeof summary.transactionId === "string" ? summary.transactionId : null;
     const address =
