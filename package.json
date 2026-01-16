@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node ./node_modules/prisma/build/index.js generate && next build",
+    "postinstall": "node ./node_modules/prisma/build/index.js generate",
     "start": "next start",
     "lint": "eslint",
     "test": "tsx tests/googleSync.test.ts"
@@ -12,6 +13,7 @@
   "dependencies": {
     "@heroicons/react": "^2.1.5",
     "@prisma/client": "^6.19.0",
+    "prisma": "^6.19.0",
     "framer-motion": "^10.18.0",
     "googleapis": "^133.0.0",
     "next": "14.2.10",
@@ -28,7 +30,6 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.10",
     "postcss": "^8.4.49",
-    "prisma": "^6.19.0",
     "tailwindcss": "^3.4.14",
     "typescript": "^5.6.2",
     "tsx": "^4.19.1"
