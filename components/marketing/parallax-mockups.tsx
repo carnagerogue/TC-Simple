@@ -60,7 +60,9 @@ export function ParallaxMockups() {
           >
             <GlassCard className="border-white/10 bg-white/10 p-6 text-left text-slate-100">
               <p className="text-xs uppercase tracking-[0.4em] text-slate-200">Realtime summary</p>
-              <h3 className="mt-4 text-2xl font-semibold text-white">"Loan docs cleared. Timeline recalibrated."</h3>
+              <h3 className="mt-4 text-2xl font-semibold text-white">
+                &ldquo;Loan docs cleared. Timeline recalibrated.&rdquo;
+              </h3>
               <p className="mt-3 text-sm text-slate-200">
                 Clients see the narrative update instantly, while your team receives structured tasks and annotated PDF
                 callouts. It feels alive.
