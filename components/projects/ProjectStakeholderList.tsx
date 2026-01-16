@@ -129,12 +129,7 @@ export function ProjectStakeholderList({
       }
     }
 
-    const roleOrder = ROLE_OPTIONS;
-    const groups = Array.from(map.values()).map((g) => ({
-      ...g,
-      roles: g.roles.sort((a, b) => roleOrder.indexOf(a) - roleOrder.indexOf(b)),
-    }));
-
+    const groups = Array.from(map.values());
     groups.sort((a, b) => {
       const an = `${a.contact.firstName} ${a.contact.lastName || ""}`.trim().toLowerCase();
       const bn = `${b.contact.firstName} ${b.contact.lastName || ""}`.trim().toLowerCase();
@@ -148,14 +143,13 @@ export function ProjectStakeholderList({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/stakeholders`, { cache: "no-store", credentials: "include" });
+      const res = await fetch(`/api/projects/${projectId}/stakeholders`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load stakeholders");
       const data = (await res.json()) as { stakeholders?: Stakeholder[]; myClientRole?: string | null };
       setStakeholders(data.stakeholders || []);
       setClientRole(data.myClientRole ?? null);
     } catch (e: unknown) {
-      const errorMsg = e instanceof Error ? e.message : "Unable to load stakeholders";
-      setError(errorMsg);
+      setError(e instanceof Error ? e.message : "Unable to load stakeholders");
     } finally {
       setLoading(false);
     }
@@ -163,17 +157,13 @@ export function ProjectStakeholderList({
 
   const loadContacts = useCallback(async () => {
     try {
-      const res = await fetch(`/api/contacts?sort=name`, { cache: "no-store", credentials: "include" });
+      const res = await fetch(`/api/contacts?sort=name`, { cache: "no-store" });
       if (res.ok) {
         const data = (await res.json()) as { contacts?: ContactOption[] };
         setContacts(data.contacts || []);
       }
     } catch (_) { /* ignore */ }
   }, []);
-
-  useEffect(() => {
-    setClientRole(myClientRole ?? null);
-  }, [myClientRole]);
 
   useEffect(() => {
     loadStakeholders();
@@ -194,48 +184,18 @@ export function ProjectStakeholderList({
       const res = await fetch(`/api/projects/${projectId}/stakeholders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ contactId, role: roleValue }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Failed to add stakeholder");
-      }
+      if (!res.ok) throw new Error("Failed to add stakeholder");
       await loadStakeholders();
     } catch (e: unknown) {
-      const errorMsg = e instanceof Error ? e.message : "Unable to add stakeholder";
-      setError(errorMsg);
+      setError(e instanceof Error ? e.message : "Unable to add stakeholder");
     } finally {
       setBusy(false);
     }
   };
 
-  const createAndAttach = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/stakeholders/add-contact`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ...newContact, role }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Failed to add contact");
-      }
-      await loadContacts();
-      await loadStakeholders();
-      setNewContact({ firstName: "", lastName: "", email: "", phone: "", category: "CLIENT", company: "", roleTitle: "" });
-    } catch (e: unknown) {
-      const errorMsg = e instanceof Error ? e.message : "Unable to add contact";
-      setError(errorMsg);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const assignAsClient = async (contactId: string, roleValue: "BUYER" | "SELLER") => {
+  const assignAsClient = useCallback(async (contactId: string, roleValue: "BUYER" | "SELLER") => {
     setBusy(true);
     setError(null);
     try {
@@ -243,7 +203,6 @@ export function ProjectStakeholderList({
       const res = await fetch(`/api/projects/${projectId}/my-client`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ role: roleValue }),
       });
       const data = await res.json().catch(() => ({}));
@@ -252,8 +211,27 @@ export function ProjectStakeholderList({
       onClientRoleChange?.((data.myClientRole ?? roleValue) as "BUYER" | "SELLER");
       await loadStakeholders();
     } catch (e: unknown) {
-      const errorMsg = e instanceof Error ? e.message : "Unable to assign client";
-      setError(errorMsg);
+      setError(e instanceof Error ? e.message : "Unable to assign client");
+    } finally {
+      setBusy(false);
+    }
+  }, [projectId, onClientRoleChange, loadStakeholders]);
+
+  const createAndAttach = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/stakeholders/add-contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newContact, role }),
+      });
+      if (!res.ok) throw new Error("Failed to add contact");
+      await loadContacts();
+      await loadStakeholders();
+      setNewContact({ firstName: "", lastName: "", email: "", phone: "", category: "CLIENT", company: "", roleTitle: "" });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Unable to add contact");
     } finally {
       setBusy(false);
     }
@@ -266,38 +244,12 @@ export function ProjectStakeholderList({
       const res = await fetch(`/api/projects/${projectId}/stakeholders`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ contactId, role: roleValue }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Failed to remove");
-      }
+      if (!res.ok) throw new Error("Failed to remove");
       setStakeholders((prev) => prev.filter((s) => !(s.contact.id === contactId && s.role === roleValue)));
     } catch (e: unknown) {
-      const errorMsg = e instanceof Error ? e.message : "Unable to remove";
-      setError(errorMsg);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const removeContactFromProject = async (contactId: string, rolesToRemove: string[]) => {
-    setBusy(true);
-    setError(null);
-    try {
-      for (const roleValue of rolesToRemove) {
-        await fetch(`/api/projects/${projectId}/stakeholders`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ contactId, role: roleValue }),
-        });
-      }
-      setStakeholders((prev) => prev.filter((s) => s.contact.id !== contactId));
-    } catch (e: unknown) {
-      const errorMsg = e instanceof Error ? e.message : "Unable to remove";
-      setError(errorMsg);
+      setError(e instanceof Error ? e.message : "Unable to remove");
     } finally {
       setBusy(false);
     }
@@ -309,12 +261,16 @@ export function ProjectStakeholderList({
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${busy ? "opacity-60 pointer-events-none" : ""}`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Stakeholders</p>
           <h3 className="text-lg font-semibold text-slate-900">Project stakeholders</h3>
-          <p className="text-xs text-slate-500 mt-1">Assign parties and representation roles per contact.</p>
+          {clientRole && (
+            <p className="text-xs text-emerald-600 font-semibold mt-1 italic">
+              Currently representing the {clientRole.toLowerCase()}.
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -328,69 +284,54 @@ export function ProjectStakeholderList({
       <div className="mt-3 space-y-3">
         {loading ? (
           <p className="text-sm text-slate-500">Loading...</p>
-        ) : groupedStakeholders.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">No stakeholders yet.</div>
-        ) : (
-          groupedStakeholders.map((g) => {
-            const name = [g.contact.firstName, g.contact.lastName].filter(Boolean).join(" ");
-            const rolesSet = new Set(g.roles);
-            const isExpanded = expandedContactId === g.contact.id;
-            return (
-              <div key={g.contact.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm overflow-hidden">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex flex-1 items-start gap-3">
-                    {/* Senior Fix: Removed invalid 'size' prop causing the build error */}
-                    <ContactAvatar name={name || "Unnamed"} photoUrl={g.contact.avatarUrl || undefined} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900">{name || "Unnamed"}</p>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                        {g.contact.email && <span>{g.contact.email}</span>}
-                        {g.contact.phone && <span>{g.contact.phone}</span>}
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
-                        <span className={`rounded-full px-2 py-0.5 ${badgeClass(g.contact.category)}`}>{g.contact.category.toLowerCase()}</span>
-                        {g.roles.map((r) => (
-                          <span key={r} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">{ROLE_LABELS[r] || r.toLowerCase()}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-2">
-                    <span className="max-w-full rounded-xl bg-slate-100 px-3 py-1.5 text-[11px] leading-snug text-slate-600">Worked together: {g.totalTransactions || 1} txn</span>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => setExpandedContactId(cur => cur === g.contact.id ? null : g.contact.id)} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
-                        {isExpanded ? "Done" : "Manage"}
-                      </button>
-                      <button type="button" onClick={() => removeContactFromProject(g.contact.id, g.roles)} className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-600">
-                        Remove
-                      </button>
+        ) : groupedStakeholders.map((g) => {
+          const name = [g.contact.firstName, g.contact.lastName].filter(Boolean).join(" ");
+          const rolesSet = new Set(g.roles);
+          const isExpanded = expandedContactId === g.contact.id;
+          return (
+            <div key={g.contact.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex flex-1 items-start gap-3">
+                  <ContactAvatar name={name || "Unnamed"} photoUrl={g.contact.avatarUrl || undefined} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">{name || "Unnamed"}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+                      <span className={`rounded-full px-2 py-0.5 ${badgeClass(g.contact.category)}`}>{g.contact.category.toLowerCase()}</span>
+                      {g.roles.map((r) => (
+                        <span key={r} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">{ROLE_LABELS[r] || r.toLowerCase()}</span>
+                      ))}
                     </div>
                   </div>
                 </div>
-                {isExpanded && (
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Party</p>
-                        <div className="flex flex-wrap gap-2">
-                          <button type="button" onClick={() => toggleRole(g.contact.id, "BUYER", rolesSet.has("BUYER"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("BUYER") ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700"}`}>Buyer</button>
-                          <button type="button" onClick={() => toggleRole(g.contact.id, "SELLER", rolesSet.has("SELLER"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("SELLER") ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700"}`}>Seller</button>
-                        </div>
+                <div className="flex shrink-0 gap-2">
+                  <button type="button" onClick={() => setExpandedContactId(cur => cur === g.contact.id ? null : g.contact.id)} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
+                    {isExpanded ? "Done" : "Manage"}
+                  </button>
+                </div>
+              </div>
+              {isExpanded && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Party Type</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => toggleRole(g.contact.id, "BUYER", rolesSet.has("BUYER"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("BUYER") ? "bg-slate-900 text-white" : "bg-white text-slate-700"}`}>Buyer</button>
+                        <button type="button" onClick={() => toggleRole(g.contact.id, "SELLER", rolesSet.has("SELLER"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("SELLER") ? "bg-slate-900 text-white" : "bg-white text-slate-700"}`}>Seller</button>
                       </div>
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Representation</p>
-                        <div className="flex flex-wrap gap-2">
-                          <button type="button" onClick={() => toggleRole(g.contact.id, "BUYER_AGENT", rolesSet.has("BUYER_AGENT"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("BUYER_AGENT") ? "border-[#0275ff] bg-[#eaf2ff] text-[#1b4c96]" : "border-slate-200 bg-white text-slate-700"}`}>Buyer side</button>
-                          <button type="button" onClick={() => toggleRole(g.contact.id, "SELLER_AGENT", rolesSet.has("SELLER_AGENT"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("SELLER_AGENT") ? "border-[#0275ff] bg-[#eaf2ff] text-[#1b4c96]" : "border-slate-200 bg-white text-slate-700"}`}>Seller side</button>
-                        </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Client Action</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => assignAsClient(g.contact.id, "BUYER")} className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Set as My Client (Buyer)</button>
+                        <button type="button" onClick={() => assignAsClient(g.contact.id, "SELLER")} className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Set as My Client (Seller)</button>
                       </div>
                     </div>
                   </div>
-                )}
-              </div>
-            );
-          })
-        )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {modalOpen && (
@@ -417,7 +358,6 @@ export function ProjectStakeholderList({
               </div>
               <div className="space-y-2">
                 <input value={newContact.firstName} onChange={e => setNewContact(p => ({ ...p, firstName: e.target.value }))} placeholder="First Name" className="w-full rounded border p-2 text-sm" />
-                <input value={newContact.lastName} onChange={e => setNewContact(p => ({ ...p, lastName: e.target.value }))} placeholder="Last Name" className="w-full rounded border p-2 text-sm" />
                 <button type="button" onClick={createAndAttach} className="w-full rounded bg-emerald-500 p-2 text-xs text-white">Add and attach</button>
               </div>
             </div>
