@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ContactAvatar } from "@/components/contacts/ContactAvatar";
+import type { StakeholderRole } from "@prisma/client";
 
 export type Stakeholder = {
   id: string;
-  role: string;
+  role: StakeholderRole;
   totalTransactions?: number;
   contact: {
     id: string;
@@ -177,7 +178,7 @@ export function ProjectStakeholderList({
     }
   }, [forceOpenModal, onModalSettled]);
 
-  const attachContact = async (contactId: string, roleValue: string) => {
+  const attachContact = useCallback(async (contactId: string, roleValue: string) => {
     setBusy(true);
     setError(null);
     try {
@@ -193,7 +194,7 @@ export function ProjectStakeholderList({
     } finally {
       setBusy(false);
     }
-  };
+  }, [projectId, loadStakeholders]);
 
   const assignAsClient = useCallback(async (contactId: string, roleValue: "BUYER" | "SELLER") => {
     setBusy(true);
@@ -215,7 +216,7 @@ export function ProjectStakeholderList({
     } finally {
       setBusy(false);
     }
-  }, [projectId, onClientRoleChange, loadStakeholders]);
+  }, [attachContact, projectId, onClientRoleChange, loadStakeholders]);
 
   const createAndAttach = async () => {
     setBusy(true);

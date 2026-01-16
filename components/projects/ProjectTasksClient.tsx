@@ -1,12 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { ProjectTaskCard } from "./ProjectTaskCard";
-import { TagEditModal } from "./TagEditModal";
-import { ProjectSidebar } from "./ProjectSidebar";
 import { ProjectStakeholderList, Stakeholder } from "./ProjectStakeholderList";
-import { TaskDetailModal } from "./TaskDetailModal";
 import { EmailDraftModal } from "./EmailDraftModal";
 import { extractRoleFromTags, tagsIncludeEmail, renderTemplate, normalizeRoleToStakeholder } from "@/lib/emailHelpers";
 
@@ -37,14 +33,9 @@ type Props = {
 };
 
 export function ProjectTasksClient({ projectId, initialProject, initialTasks }: Props) {
-  const [project, setProject] = useState<Project>(initialProject);
+  const [project] = useState<Project>(initialProject);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [tagModal, setTagModal] = useState<{ open: boolean; taskId: string | null; tags: string }>({
-    open: false,
-    taskId: null,
-    tags: "",
-  });
-  const [detailModal, setDetailModal] = useState<{ open: boolean; task: Task | null }>({
+  const [, setDetailModal] = useState<{ open: boolean; task: Task | null }>({
     open: false,
     task: null,
   });
@@ -63,7 +54,6 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
     tags?: string;
     contextRole?: string | null;
   }>({ open: false });
-  const router = useRouter();
 
   const updateMyClientRole = async (role: "BUYER" | "SELLER") => {
     setUpdatingClient(true);
@@ -210,6 +200,7 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
               <ProjectTaskCard
                 key={task.id}
                 {...task}
+                tags={task.tags ?? undefined}
                 onToggle={(checked) => toggleStatus(task.id, checked)}
                 onDelete={() => {}}
                 onEditTags={() => {}}
@@ -226,13 +217,22 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
           </div>
         </div>
         <div className="w-full max-w-[420px] shrink-0">
+          {(updatingClient || clientWarning) && (
+            <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 text-sm">
+              {updatingClient ? (
+                <p className="text-slate-600">Updating client role…</p>
+              ) : (
+                <p className="text-amber-700">{clientWarning}</p>
+              )}
+            </div>
+          )}
           <ProjectStakeholderList
             projectId={projectId}
             myClientRole={myClientRole}
             refreshKey={stakeholderRefreshKey}
             forceOpenModal={forceStakeholderModal}
             onModalSettled={() => setForceStakeholderModal(false)}
-            onClientRoleChange={(role) => setMyClientRole(role)}
+            onClientRoleChange={(role) => updateMyClientRole(role)}
           />
         </div>
       </div>
