@@ -8,6 +8,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+type SessionUser = { id?: string; email?: string | null };
+
 function coerceStringOrStringArray(value: unknown): string | string[] {
   if (Array.isArray(value)) {
     return value.map((v) => String(v));
@@ -35,13 +37,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
 
-  const userId = session.user.id || session.user.email;
+  const user = session.user as SessionUser;
+  const userId = user.id || user.email;
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // Normalize items to record summary
-  const summary: Record<string, unknown> = {};
+  const summary: Record<string, string | string[]> = {};
   const normalizedItems: Array<{ field: string; value: string | string[] }> = [];
 
   if (Array.isArray(items)) {
@@ -80,7 +83,7 @@ export async function POST(request: NextRequest) {
   if (Array.isArray(providedTasks) && providedTasks.length > 0) {
     tasksToCreate = providedTasks
       .map((t) => (isRecord(t) ? t : null))
-      .filter(Boolean)
+      .filter((t): t is Record<string, unknown> => t !== null)
       .map((t) => {
         const title = typeof t.title === "string" ? t.title : "";
         const status = typeof t.status === "string" ? t.status : "upcoming";
@@ -128,10 +131,14 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const user = session?.user as SessionUser | undefined;
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const userId = session.user.id as string;
+  const userId = user.id || user.email;
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const projects = await db.project.findMany({
     where: { userId },
@@ -148,4 +155,3 @@ export async function GET() {
     }))
   );
 }
-
