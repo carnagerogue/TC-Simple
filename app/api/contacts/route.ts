@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -38,7 +37,7 @@ function buildWhere(userId: string, searchParams: URLSearchParams) {
   const q = searchParams.get("q")?.trim();
   const category = searchParams.get("category")?.toUpperCase();
 
-  const where: Prisma.ContactWhereInput = { userId };
+  const where: NonNullable<Parameters<typeof db.contact.findMany>[0]["where"]> = { userId };
 
   if (category && VALID_CATEGORIES.includes(category as Category)) {
     where.category = category;
