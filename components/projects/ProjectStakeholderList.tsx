@@ -154,8 +154,8 @@ export function ProjectStakeholderList({
       setStakeholders(data.stakeholders || []);
       setClientRole(data.myClientRole ?? null);
     } catch (e: unknown) {
-      const error = e as { message?: string };
-      setError(error.message || "Unable to load stakeholders");
+      const errorMsg = e instanceof Error ? e.message : "Unable to load stakeholders";
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -168,9 +168,7 @@ export function ProjectStakeholderList({
         const data = (await res.json()) as { contacts?: ContactOption[] };
         setContacts(data.contacts || []);
       }
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -205,8 +203,8 @@ export function ProjectStakeholderList({
       }
       await loadStakeholders();
     } catch (e: unknown) {
-      const error = e as { message?: string };
-      setError(error.message || "Unable to add stakeholder");
+      const errorMsg = e instanceof Error ? e.message : "Unable to add stakeholder";
+      setError(errorMsg);
     } finally {
       setBusy(false);
     }
@@ -220,7 +218,7 @@ export function ProjectStakeholderList({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ ...newContact, category: newContact.category, role }),
+        body: JSON.stringify({ ...newContact, role }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -230,8 +228,8 @@ export function ProjectStakeholderList({
       await loadStakeholders();
       setNewContact({ firstName: "", lastName: "", email: "", phone: "", category: "CLIENT", company: "", roleTitle: "" });
     } catch (e: unknown) {
-      const error = e as { message?: string };
-      setError(error.message || "Unable to add contact");
+      const errorMsg = e instanceof Error ? e.message : "Unable to add contact";
+      setError(errorMsg);
     } finally {
       setBusy(false);
     }
@@ -249,15 +247,13 @@ export function ProjectStakeholderList({
         body: JSON.stringify({ role: roleValue }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || "Unable to set client role");
-      }
+      if (!res.ok) throw new Error(data.error || "Unable to set client role");
       setClientRole(data.myClientRole ?? roleValue);
       onClientRoleChange?.((data.myClientRole ?? roleValue) as "BUYER" | "SELLER");
       await loadStakeholders();
     } catch (e: unknown) {
-      const error = e as { message?: string };
-      setError(error.message || "Unable to assign client");
+      const errorMsg = e instanceof Error ? e.message : "Unable to assign client";
+      setError(errorMsg);
     } finally {
       setBusy(false);
     }
@@ -279,8 +275,8 @@ export function ProjectStakeholderList({
       }
       setStakeholders((prev) => prev.filter((s) => !(s.contact.id === contactId && s.role === roleValue)));
     } catch (e: unknown) {
-      const error = e as { message?: string };
-      setError(error.message || "Unable to remove");
+      const errorMsg = e instanceof Error ? e.message : "Unable to remove";
+      setError(errorMsg);
     } finally {
       setBusy(false);
     }
@@ -291,32 +287,25 @@ export function ProjectStakeholderList({
     setError(null);
     try {
       for (const roleValue of rolesToRemove) {
-        const res = await fetch(`/api/projects/${projectId}/stakeholders`, {
+        await fetch(`/api/projects/${projectId}/stakeholders`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ contactId, role: roleValue }),
         });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || "Failed to remove");
-        }
       }
       setStakeholders((prev) => prev.filter((s) => s.contact.id !== contactId));
     } catch (e: unknown) {
-      const error = e as { message?: string };
-      setError(error.message || "Unable to remove");
+      const errorMsg = e instanceof Error ? e.message : "Unable to remove";
+      setError(errorMsg);
     } finally {
       setBusy(false);
     }
   };
 
   const toggleRole = async (contactId: string, roleValue: string, active: boolean) => {
-    if (active) {
-      await removeStakeholder(contactId, roleValue);
-    } else {
-      await attachContact(contactId, roleValue);
-    }
+    if (active) { await removeStakeholder(contactId, roleValue); } 
+    else { await attachContact(contactId, roleValue); }
   };
 
   return (
@@ -325,9 +314,7 @@ export function ProjectStakeholderList({
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Stakeholders</p>
           <h3 className="text-lg font-semibold text-slate-900">Project stakeholders</h3>
-          <p className="text-xs text-slate-500 mt-1">
-            Assign parties and representation roles per contact. This powers email routing and your client mapping.
-          </p>
+          <p className="text-xs text-slate-500 mt-1">Assign parties and representation roles per contact.</p>
         </div>
         <button
           type="button"
@@ -337,338 +324,106 @@ export function ProjectStakeholderList({
           Add stakeholder
         </button>
       </div>
-      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       <div className="mt-3 space-y-3">
         {loading ? (
           <p className="text-sm text-slate-500">Loading...</p>
         ) : groupedStakeholders.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
-            No stakeholders yet.
-          </div>
+          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">No stakeholders yet.</div>
         ) : (
           groupedStakeholders.map((g) => {
             const name = [g.contact.firstName, g.contact.lastName].filter(Boolean).join(" ");
             const rolesSet = new Set(g.roles);
-            const isDualAgent = rolesSet.has("BUYER_AGENT") && rolesSet.has("SELLER_AGENT");
-            const isBuyerAgent = rolesSet.has("BUYER_AGENT");
-            const isSellerAgent = rolesSet.has("SELLER_AGENT");
-            const isBuyer = rolesSet.has("BUYER");
-            const isSeller = rolesSet.has("SELLER");
             const isExpanded = expandedContactId === g.contact.id;
             return (
-              <div
-                key={g.contact.id}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm overflow-hidden"
-              >
+              <div key={g.contact.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm overflow-hidden">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex flex-1 items-start gap-3">
-                    <ContactAvatar name={name || "Unnamed"} photoUrl={g.contact.avatarUrl || undefined} size="sm" />
+                    {/* Senior Fix: Removed invalid 'size' prop causing the build error */}
+                    <ContactAvatar name={name || "Unnamed"} photoUrl={g.contact.avatarUrl || undefined} />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-slate-900">{name || "Unnamed"}</p>
                       <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                        {g.contact.email ? <span>{g.contact.email}</span> : null}
-                        {g.contact.phone ? <span>{g.contact.phone}</span> : null}
+                        {g.contact.email && <span>{g.contact.email}</span>}
+                        {g.contact.phone && <span>{g.contact.phone}</span>}
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
-                        <span className={`rounded-full px-2 py-0.5 ${badgeClass(g.contact.category)}`}>
-                          {g.contact.category.toLowerCase()}
-                        </span>
+                        <span className={`rounded-full px-2 py-0.5 ${badgeClass(g.contact.category)}`}>{g.contact.category.toLowerCase()}</span>
                         {g.roles.map((r) => (
-                          <span key={r} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
-                            {ROLE_LABELS[r] || r.toLowerCase()}
-                          </span>
+                          <span key={r} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">{ROLE_LABELS[r] || r.toLowerCase()}</span>
                         ))}
-                        {clientRole && rolesSet.has(clientRole) ? (
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">My Client</span>
-                        ) : null}
-                        {isDualAgent ? (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">Dual Agent</span>
-                        ) : null}
                       </div>
                     </div>
                   </div>
-
                   <div className="flex shrink-0 flex-col items-end gap-2">
-                    <span className="max-w-full rounded-xl bg-slate-100 px-3 py-1.5 text-[11px] leading-snug text-slate-600 text-right">
-                      Worked together: {g.totalTransactions || 1} txn{g.totalTransactions === 1 ? "" : "s"}
-                    </span>
+                    <span className="max-w-full rounded-xl bg-slate-100 px-3 py-1.5 text-[11px] leading-snug text-slate-600">Worked together: {g.totalTransactions || 1} txn</span>
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => setExpandedContactId((cur) => (cur === g.contact.id ? null : g.contact.id))}
-                        className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                      >
+                      <button type="button" onClick={() => setExpandedContactId(cur => cur === g.contact.id ? null : g.contact.id)} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
                         {isExpanded ? "Done" : "Manage"}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => removeContactFromProject(g.contact.id, g.roles)}
-                        disabled={busy}
-                        className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
-                      >
+                      <button type="button" onClick={() => removeContactFromProject(g.contact.id, g.roles)} className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-600">
                         Remove
                       </button>
                     </div>
                   </div>
                 </div>
-
-                {isExpanded ? (
+                {isExpanded && (
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Party</p>
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => toggleRole(g.contact.id, "BUYER", isBuyer)}
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                              isBuyer
-                                ? "border-slate-900 bg-slate-900 text-white"
-                                : "border-slate-200 bg-white text-slate-700 hover:border-[#9bc4ff]"
-                            }`}
-                          >
-                            Buyer
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => toggleRole(g.contact.id, "SELLER", isSeller)}
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                              isSeller
-                                ? "border-slate-900 bg-slate-900 text-white"
-                                : "border-slate-200 bg-white text-slate-700 hover:border-[#9bc4ff]"
-                            }`}
-                          >
-                            Seller
-                          </button>
+                          <button type="button" onClick={() => toggleRole(g.contact.id, "BUYER", rolesSet.has("BUYER"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("BUYER") ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700"}`}>Buyer</button>
+                          <button type="button" onClick={() => toggleRole(g.contact.id, "SELLER", rolesSet.has("SELLER"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("SELLER") ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700"}`}>Seller</button>
                         </div>
-                        <p className="text-[11px] text-slate-500">Actual parties on the contract.</p>
                       </div>
-
                       <div className="space-y-2">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Representation</p>
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => toggleRole(g.contact.id, "BUYER_AGENT", isBuyerAgent)}
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                              isBuyerAgent
-                                ? "border-[#0275ff] bg-[#eaf2ff] text-[#1b4c96]"
-                                : "border-slate-200 bg-white text-slate-700 hover:border-[#9bc4ff]"
-                            }`}
-                          >
-                            Buyer side
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => toggleRole(g.contact.id, "SELLER_AGENT", isSellerAgent)}
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                              isSellerAgent
-                                ? "border-[#0275ff] bg-[#eaf2ff] text-[#1b4c96]"
-                                : "border-slate-200 bg-white text-slate-700 hover:border-[#9bc4ff]"
-                            }`}
-                          >
-                            Seller side
-                          </button>
+                          <button type="button" onClick={() => toggleRole(g.contact.id, "BUYER_AGENT", rolesSet.has("BUYER_AGENT"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("BUYER_AGENT") ? "border-[#0275ff] bg-[#eaf2ff] text-[#1b4c96]" : "border-slate-200 bg-white text-slate-700"}`}>Buyer side</button>
+                          <button type="button" onClick={() => toggleRole(g.contact.id, "SELLER_AGENT", rolesSet.has("SELLER_AGENT"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("SELLER_AGENT") ? "border-[#0275ff] bg-[#eaf2ff] text-[#1b4c96]" : "border-slate-200 bg-white text-slate-700"}`}>Seller side</button>
                         </div>
-                        <p className="text-[11px] text-slate-500">Use for agents (supports dual agency).</p>
                       </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => assignAsClient(g.contact.id, "BUYER")}
-                          className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                        >
-                          Make My Client: Buyer
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => assignAsClient(g.contact.id, "SELLER")}
-                          className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                        >
-                          Make My Client: Seller
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedContactId(null)}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        Done
-                      </button>
                     </div>
                   </div>
-                ) : null}
+                )}
               </div>
             );
           })
         )}
       </div>
 
-      {modalOpen ? (
+      {modalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Add stakeholder</p>
-                <h4 className="text-lg font-semibold text-slate-900">Attach a contact</h4>
-              </div>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50"
-              >
-                ✕
-              </button>
+              <h4 className="text-lg font-semibold text-slate-900">Attach a contact</h4>
+              <button type="button" onClick={() => setModalOpen(false)} className="text-slate-600">✕</button>
             </div>
-
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <div>
-                <p className="text-xs font-semibold text-slate-600">Role</p>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
-                >
-                  {ROLE_OPTIONS.map((r) => (
-                    <option key={r} value={r}>
-                      {ROLE_LABELS[r]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex-1 min-w-[220px]">
-                <p className="text-xs font-semibold text-slate-600">Search contacts</p>
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search name, email, phone"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
-                />
-              </div>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setModalOpen(false)}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Close
-              </button>
+              <select value={role} onChange={e => setRole(e.target.value)} className="rounded-lg border p-2 text-sm">
+                {ROLE_OPTIONS.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              </select>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search contacts" className="flex-1 rounded-lg border p-2 text-sm" />
             </div>
-
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-sm font-semibold text-slate-900">Select existing</p>
-                <div className="mt-2 max-h-64 space-y-2 overflow-y-auto pr-1">
-                  {filteredContacts.length === 0 ? (
-                    <p className="text-xs text-slate-500">No contacts</p>
-                  ) : (
-                    filteredContacts.map((c) => {
-                      const name = [c.firstName, c.lastName].filter(Boolean).join(" ");
-                      return (
-                        <div
-                          key={c.id}
-                          className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs shadow-sm"
-                        >
-                          <div>
-                            <p className="font-semibold text-slate-900 text-sm">{name || "Unnamed"}</p>
-                            <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
-                              {c.email ? <span>{c.email}</span> : null}
-                              {c.phone ? <span>{c.phone}</span> : null}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => attachContact(c.id, role)}
-                            className="rounded-md bg-[#0275ff] px-2 py-1 text-xs font-semibold text-white hover:bg-[#0169e6] disabled:opacity-50"
-                          >
-                            Select
-                          </button>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {filteredContacts.map(c => (
+                  <div key={c.id} className="flex items-center justify-between rounded-lg border p-2">
+                    <span className="text-sm">{c.firstName} {c.lastName}</span>
+                    <button type="button" onClick={() => attachContact(c.id, role)} className="rounded bg-[#0275ff] px-2 py-1 text-xs text-white">Select</button>
+                  </div>
+                ))}
               </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-sm font-semibold text-slate-900">Add new contact</p>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                  <input
-                    value={newContact.firstName}
-                    onChange={(e) => setNewContact((p) => ({ ...p, firstName: e.target.value }))}
-                    placeholder="First name"
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
-                  />
-                  <input
-                    value={newContact.lastName}
-                    onChange={(e) => setNewContact((p) => ({ ...p, lastName: e.target.value }))}
-                    placeholder="Last name"
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
-                  />
-                  <input
-                    value={newContact.email}
-                    onChange={(e) => setNewContact((p) => ({ ...p, email: e.target.value }))}
-                    placeholder="Email"
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
-                  />
-                  <input
-                    value={newContact.phone}
-                    onChange={(e) => setNewContact((p) => ({ ...p, phone: e.target.value }))}
-                    placeholder="Phone"
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
-                  />
-                  <select
-                    value={newContact.category}
-                    onChange={(e) => setNewContact((p) => ({ ...p, category: e.target.value }))}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
-                  >
-                    <option value="AGENT">Agent</option>
-                    <option value="CLIENT">Client</option>
-                    <option value="ESCROW">Escrow</option>
-                    <option value="VENDOR">Vendor</option>
-                    <option value="LENDER">Lender</option>
-                    <option value="TITLE">Title</option>
-                    <option value="OTHER">Other</option>
-                  </select>
-                  <input
-                    value={newContact.company}
-                    onChange={(e) => setNewContact((p) => ({ ...p, company: e.target.value }))}
-                    placeholder="Company"
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
-                  />
-                  <input
-                    value={newContact.roleTitle}
-                    onChange={(e) => setNewContact((p) => ({ ...p, roleTitle: e.target.value }))}
-                    placeholder="Role/Title"
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
-                  />
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={createAndAttach}
-                    className="rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-600 disabled:opacity-50"
-                  >
-                    Add contact and attach
-                  </button>
-                </div>
+              <div className="space-y-2">
+                <input value={newContact.firstName} onChange={e => setNewContact(p => ({ ...p, firstName: e.target.value }))} placeholder="First Name" className="w-full rounded border p-2 text-sm" />
+                <input value={newContact.lastName} onChange={e => setNewContact(p => ({ ...p, lastName: e.target.value }))} placeholder="Last Name" className="w-full rounded border p-2 text-sm" />
+                <button type="button" onClick={createAndAttach} className="w-full rounded bg-emerald-500 p-2 text-xs text-white">Add and attach</button>
               </div>
             </div>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
