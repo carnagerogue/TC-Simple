@@ -2,6 +2,7 @@
 
 import { useState, useCallback, DragEvent, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { ParsedItemCard } from "@/components/ParsedItemCard";
 import { labelForField } from "@/lib/projectTaskTemplates";
 
@@ -264,9 +265,12 @@ export function UploadForm() {
               <div className="flex items-center gap-3">
                 {status.type === "loading" ? (
                   <div className="flex flex-col items-center gap-3 w-full">
-                    <img
+                    <Image
                       src="/tc-simple%20loading.gif?v=4"
                       alt="Uploading and parsing..."
+                      width={320}
+                      height={320}
+                      unoptimized
                       className="h-[320px] w-[320px] max-h-[400px] max-w-[400px] object-contain"
                     />
                   </div>

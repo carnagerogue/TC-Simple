@@ -1,7 +1,7 @@
 "use client";
 
 type Props = {
-  summary?: Record<string, any> | null;
+  summary?: Record<string, string | number | null | undefined> | null;
   myClientRole?: "BUYER" | "SELLER" | null;
 };
 

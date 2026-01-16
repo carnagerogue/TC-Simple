@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TemplateCategory } from "@prisma/client";
-import { renderTemplate, validatePlaceholders, ALLOWED_PLACEHOLDERS } from "@/lib/emailTemplates";
+import { renderTemplate, validatePlaceholders } from "@/lib/emailTemplates";
 import { TemplateModal } from "@/components/email-templates/TemplateModal";
 
 type Recipient = {
@@ -25,7 +25,7 @@ type Props = {
   projectId: string;
   tags?: string;
   stakeholders?: Stakeholder[];
-  projectSummary?: Record<string, any> | null;
+  projectSummary?: Record<string, string | number | null | undefined> | null;
   contextRole?: string | null;
 };
 
@@ -138,12 +138,12 @@ export function EmailDraftModal({
     const previewSubject = renderTemplate(
       selectedTemplate.subject,
       { summary: projectSummary, myClientRole: null },
-      stakeholders as any
+      stakeholders
     );
     const previewBody = renderTemplate(
       selectedTemplate.body,
       { summary: projectSummary, myClientRole: null },
-      stakeholders as any
+      stakeholders
     );
     return { subject: previewSubject, body: previewBody };
   }, [selectedTemplate, projectSummary, stakeholders]);
@@ -170,8 +170,9 @@ export function EmailDraftModal({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Unable to send email");
       onClose();
-    } catch (e: any) {
-      alert(e.message || "Unable to send email");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      alert(error.message || "Unable to send email");
     } finally {
       setSending(false);
     }
@@ -183,8 +184,8 @@ export function EmailDraftModal({
       const confirmed = confirm("Replace current draft with selected template?");
       if (!confirmed) return;
     }
-    const renderedSubject = renderTemplate(tmpl.subject, { summary: projectSummary, myClientRole: null }, stakeholders as any);
-    const renderedBody = renderTemplate(tmpl.body, { summary: projectSummary, myClientRole: null }, stakeholders as any);
+    const renderedSubject = renderTemplate(tmpl.subject, { summary: projectSummary, myClientRole: null }, stakeholders);
+    const renderedBody = renderTemplate(tmpl.body, { summary: projectSummary, myClientRole: null }, stakeholders);
     setSubj(renderedSubject);
     setMsg(renderedBody);
     setSelectedTemplate(tmpl);
@@ -302,90 +303,92 @@ export function EmailDraftModal({
           </div>
 
           {/* Right side — Templates drawer */}
-          <div className="flex flex-col w-[360px] shrink-0 border-l border-gray-200 overflow-hidden">
-            <div className="sticky top-0 z-20 bg-white py-3 px-4 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-800">Templates</h3>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-4 py-2 space-y-4">
-              <div className="flex items-center gap-2">
-                <input
-                  value={templateSearch}
-                  onChange={(e) => setTemplateSearch(e.target.value)}
-                  placeholder="Search"
-                  className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-[#9bc4ff] focus:outline-none"
-                />
-                <select
-                  value={templateCategory}
-                  onChange={(e) => setTemplateCategory(e.target.value)}
-                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-[#9bc4ff] focus:outline-none"
-                >
-                  <option value="ALL">All</option>
-                  {Object.keys(TemplateCategory).map((c) => (
-                    <option key={c} value={c}>
-                      {c.charAt(0) + c.slice(1).toLowerCase()}
-                    </option>
-                  ))}
-                </select>
+          {drawerOpen ? (
+            <div className="flex flex-col w-[360px] shrink-0 border-l border-gray-200 overflow-hidden">
+              <div className="sticky top-0 z-20 bg-white py-3 px-4 border-b border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800">Templates</h3>
               </div>
 
-              {templates.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-500">
-                  No templates yet. Create one here →{" "}
-                  <button
-                    type="button"
-                    className="text-[#1b4c96] underline"
-                    onClick={() => setShowTemplateModal(true)}
+              <div className="flex-1 overflow-y-auto px-4 py-2 space-y-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    value={templateSearch}
+                    onChange={(e) => setTemplateSearch(e.target.value)}
+                    placeholder="Search"
+                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-[#9bc4ff] focus:outline-none"
+                  />
+                  <select
+                    value={templateCategory}
+                    onChange={(e) => setTemplateCategory(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-[#9bc4ff] focus:outline-none"
                   >
-                    Create Template
-                  </button>
-                </div>
-              ) : null}
-
-              {recommendedTemplates.length ? (
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recommended</p>
-                  <div className="space-y-2">
-                    {recommendedTemplates.slice(0, 3).map((t) => (
-                      <TemplateCard
-                        key={t.id}
-                        tmpl={t}
-                        expanded={selectedTemplate?.id === t.id}
-                        onSelect={(tmpl) => setSelectedTemplate(tmpl)}
-                        onUse={handleUseTemplate}
-                      />
+                    <option value="ALL">All</option>
+                    {Object.keys(TemplateCategory).map((c) => (
+                      <option key={c} value={c}>
+                        {c.charAt(0) + c.slice(1).toLowerCase()}
+                      </option>
                     ))}
+                  </select>
+                </div>
+
+                {templates.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-500">
+                    No templates yet. Create one here →{" "}
+                    <button
+                      type="button"
+                      className="text-[#1b4c96] underline"
+                      onClick={() => setShowTemplateModal(true)}
+                    >
+                      Create Template
+                    </button>
+                  </div>
+                ) : null}
+
+                {recommendedTemplates.length ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recommended</p>
+                    <div className="space-y-2">
+                      {recommendedTemplates.slice(0, 3).map((t) => (
+                        <TemplateCard
+                          key={t.id}
+                          tmpl={t}
+                          expanded={selectedTemplate?.id === t.id}
+                          onSelect={(tmpl) => setSelectedTemplate(tmpl)}
+                          onUse={handleUseTemplate}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  {filteredTemplates.map((t) => (
+                    <TemplateCard
+                      key={t.id}
+                      tmpl={t}
+                      expanded={selectedTemplate?.id === t.id}
+                      onSelect={(tmpl) => setSelectedTemplate(tmpl)}
+                      onUse={handleUseTemplate}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {selectedTemplate ? (
+                <div className="max-h-[40vh] overflow-y-auto border-t border-gray-200 bg-gray-50/60 p-4 rounded-t-xl shadow-inner">
+                  <h4 className="font-semibold text-gray-900 mb-3">Preview</h4>
+
+                  <div className="rounded-xl bg-white shadow p-4 leading-relaxed text-gray-700 whitespace-pre-wrap break-words">
+                    <p className="text-sm text-gray-500 font-medium mb-2">Subject</p>
+                    <p className="mb-4">{renderedPreview.subject}</p>
+
+                    <p className="text-sm text-gray-500 font-medium mb-2">Body</p>
+                    <p>{renderedPreview.body}</p>
                   </div>
                 </div>
               ) : null}
-
-              <div className="space-y-2">
-                {filteredTemplates.map((t) => (
-                  <TemplateCard
-                    key={t.id}
-                    tmpl={t}
-                    expanded={selectedTemplate?.id === t.id}
-                    onSelect={(tmpl) => setSelectedTemplate(tmpl)}
-                    onUse={handleUseTemplate}
-                  />
-                ))}
-              </div>
             </div>
-
-            {selectedTemplate ? (
-              <div className="max-h-[40vh] overflow-y-auto border-t border-gray-200 bg-gray-50/60 p-4 rounded-t-xl shadow-inner">
-                <h4 className="font-semibold text-gray-900 mb-3">Preview</h4>
-
-                <div className="rounded-xl bg-white shadow p-4 leading-relaxed text-gray-700 whitespace-pre-wrap break-words">
-                  <p className="text-sm text-gray-500 font-medium mb-2">Subject</p>
-                  <p className="mb-4">{renderedPreview.subject}</p>
-
-                  <p className="text-sm text-gray-500 font-medium mb-2">Body</p>
-                  <p>{renderedPreview.body}</p>
-                </div>
-              </div>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </div>
 

@@ -218,6 +218,11 @@ export function ProjectTaskCard({
                   Missing recipient — Add stakeholder
                 </button>
               )}
+              {emailMissing ? (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                  Missing recipient
+                </span>
+              ) : null}
             </p>
           ) : null}
           {renderTags()}

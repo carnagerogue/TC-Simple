@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ContactAvatar } from "@/components/contacts/ContactAvatar";
 
 export type Stakeholder = {
@@ -144,33 +144,34 @@ export function ProjectStakeholderList({
     return groups;
   }, [stakeholders]);
 
-  const loadStakeholders = async () => {
+  const loadStakeholders = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/projects/${projectId}/stakeholders`, { cache: "no-store", credentials: "include" });
       if (!res.ok) throw new Error("Failed to load stakeholders");
-      const data = await res.json();
+      const data = (await res.json()) as { stakeholders?: Stakeholder[]; myClientRole?: string | null };
       setStakeholders(data.stakeholders || []);
       setClientRole(data.myClientRole ?? null);
-    } catch (e: any) {
-      setError(e.message || "Unable to load stakeholders");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      setError(error.message || "Unable to load stakeholders");
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
 
-  const loadContacts = async () => {
+  const loadContacts = useCallback(async () => {
     try {
       const res = await fetch(`/api/contacts?sort=name`, { cache: "no-store", credentials: "include" });
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as { contacts?: ContactOption[] };
         setContacts(data.contacts || []);
       }
     } catch (_) {
       // ignore
     }
-  };
+  }, [projectId]);
 
   useEffect(() => {
     setClientRole(myClientRole ?? null);
@@ -179,7 +180,7 @@ export function ProjectStakeholderList({
   useEffect(() => {
     loadStakeholders();
     loadContacts();
-  }, [refreshKey]);
+  }, [loadStakeholders, loadContacts, refreshKey]);
 
   useEffect(() => {
     if (forceOpenModal) {
@@ -203,8 +204,9 @@ export function ProjectStakeholderList({
         throw new Error(body.error || "Failed to add stakeholder");
       }
       await loadStakeholders();
-    } catch (e: any) {
-      setError(e.message || "Unable to add stakeholder");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      setError(error.message || "Unable to add stakeholder");
     } finally {
       setBusy(false);
     }
@@ -227,8 +229,9 @@ export function ProjectStakeholderList({
       await loadContacts();
       await loadStakeholders();
       setNewContact({ firstName: "", lastName: "", email: "", phone: "", category: "CLIENT", company: "", roleTitle: "" });
-    } catch (e: any) {
-      setError(e.message || "Unable to add contact");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      setError(error.message || "Unable to add contact");
     } finally {
       setBusy(false);
     }
@@ -252,8 +255,9 @@ export function ProjectStakeholderList({
       setClientRole(data.myClientRole ?? roleValue);
       onClientRoleChange?.((data.myClientRole ?? roleValue) as "BUYER" | "SELLER");
       await loadStakeholders();
-    } catch (e: any) {
-      setError(e.message || "Unable to assign client");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      setError(error.message || "Unable to assign client");
     } finally {
       setBusy(false);
     }
@@ -274,8 +278,9 @@ export function ProjectStakeholderList({
         throw new Error(body.error || "Failed to remove");
       }
       setStakeholders((prev) => prev.filter((s) => !(s.contact.id === contactId && s.role === roleValue)));
-    } catch (e: any) {
-      setError(e.message || "Unable to remove");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      setError(error.message || "Unable to remove");
     } finally {
       setBusy(false);
     }
@@ -298,8 +303,9 @@ export function ProjectStakeholderList({
         }
       }
       setStakeholders((prev) => prev.filter((s) => s.contact.id !== contactId));
-    } catch (e: any) {
-      setError(e.message || "Unable to remove");
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      setError(error.message || "Unable to remove");
     } finally {
       setBusy(false);
     }
