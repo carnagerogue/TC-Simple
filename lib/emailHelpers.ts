@@ -83,6 +83,6 @@ export function renderTemplate(template: string, project: ProjectLike, stakehold
     .replaceAll("{escrowEmail}", getEmail("ESCROW"))
     .replaceAll("{lenderPhone}", getPhone("LENDER"))
     .replaceAll("{myClientName}", getName(project.myClientRole ?? null))
-    .replaceAll("{propertyAddress}", address || "");
+    .replaceAll("{propertyAddress}", String(address ?? ""));
 }
 

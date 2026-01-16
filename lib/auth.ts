@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import GoogleProvider from "next-auth/providers/google";
 import { db } from "@/lib/db";
+import { refreshGoogleToken } from "@/lib/google/refreshGoogleToken";
 
 const requiredEnv = (key: string) => {
   const value = process.env[key];
@@ -72,9 +73,22 @@ export const authOptions: NextAuthOptions = {
       const tokenWithExtras = token as JWT & TokenExtras;
       if (account) {
         // First-time login or re-consent; capture tokens
+        const expiresAtSec =
+          typeof account.expires_at === "number"
+            ? account.expires_at
+            : typeof account.expires_at === "string"
+              ? Number(account.expires_at)
+              : undefined;
+        const expiresInSec =
+          typeof account.expires_in === "number"
+            ? account.expires_in
+            : typeof account.expires_in === "string"
+              ? Number(account.expires_in)
+              : undefined;
+
         const expiresMs =
-          (account.expires_at ? account.expires_at * 1000 : undefined) ??
-          (account.expires_in ? Date.now() + account.expires_in * 1000 : undefined);
+          (typeof expiresAtSec === "number" && Number.isFinite(expiresAtSec) ? expiresAtSec * 1000 : undefined) ??
+          (typeof expiresInSec === "number" && Number.isFinite(expiresInSec) ? Date.now() + expiresInSec * 1000 : undefined);
 
         tokenWithExtras.accessToken = account.access_token;
         tokenWithExtras.refreshToken = account.refresh_token ?? tokenWithExtras.refreshToken;

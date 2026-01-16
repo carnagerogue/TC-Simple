@@ -130,9 +130,9 @@ export function renderTemplate(
       getEmail("SELLER_AGENT") ||
       getByRoleOrCategory("AGENT", "AGENT")?.email ||
       "",
-    propertyAddress: address || "",
-    closingDate: summary["closing_date"] || "",
-    contractDate: summary["contract_date"] || "",
+    propertyAddress: String(address ?? ""),
+    closingDate: String(summary["closing_date"] ?? ""),
+    contractDate: String(summary["contract_date"] ?? ""),
     myClientName: getName(project.myClientRole ?? null),
   };
   return template.replace(/\{([^}]+)\}/g, (_, key) => replacements[key] ?? "");
