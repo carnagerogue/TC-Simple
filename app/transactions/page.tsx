@@ -3,6 +3,13 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db, ensureDbReady } from "@/lib/db";
+import { TransactionsListClient } from "@/components/transactions/TransactionsListClient";
+
+type ProjectLite = { id: string; name: string; summary: unknown };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +27,39 @@ export default async function TransactionsPage() {
     where: { userId: { in: userIds } },
     orderBy: { createdAt: "desc" },
   });
+  const projects = (await db.project.findMany({
+    where: { userId: { in: userIds } },
+    select: { id: true, name: true, summary: true },
+  })) as ProjectLite[];
+
+  const normalize = (value: string) => value.trim().toLowerCase();
+  const projectByTxnId = new Map<string, { id: string; name: string }>();
+  const projectByAddress = new Map<string, { id: string; name: string }>();
+
+  projects.forEach((p) => {
+    const summary = isRecord(p.summary) ? p.summary : {};
+    const txnId = typeof summary.transactionId === "string" ? summary.transactionId : null;
+    const address =
+      typeof summary.property_address === "string"
+        ? summary.property_address
+        : typeof summary.address === "string"
+        ? summary.address
+        : null;
+    if (txnId) projectByTxnId.set(txnId, { id: p.id, name: p.name });
+    if (address) projectByAddress.set(normalize(address), { id: p.id, name: p.name });
+  });
+
+  const rows = txns.map((t) => {
+    const byTxn = projectByTxnId.get(t.id) || null;
+    const byAddr = t.address ? projectByAddress.get(normalize(t.address)) : null;
+    return {
+      id: t.id,
+      address: t.address,
+      stage: t.stage || "Intake",
+      updatedAt: t.updatedAt.toISOString(),
+      project: byTxn || byAddr || null,
+    };
+  });
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 pb-10">
@@ -36,32 +76,8 @@ export default async function TransactionsPage() {
         </Link>
       </div>
 
-      <div className="mt-6 space-y-3">
-        {txns.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-10 text-sm text-slate-600">
-            No transactions yet. Upload a document to create one.
-          </div>
-        ) : (
-          txns.map((t) => (
-            <Link
-              key={t.id}
-              href={`/transactions/${t.id}`}
-              className="block rounded-2xl border border-slate-200/70 bg-white px-5 py-4 shadow-sm hover:bg-slate-50"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">{t.address}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {t.stage} · Updated {t.updatedAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  View
-                </span>
-              </div>
-            </Link>
-          ))
-        )}
+      <div className="mt-6">
+        <TransactionsListClient transactions={rows} />
       </div>
     </div>
   );

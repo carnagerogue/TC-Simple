@@ -7,6 +7,7 @@ import { EmailDraftModal } from "./EmailDraftModal";
 import { TagEditModal } from "./TagEditModal";
 import { TaskDetailModal } from "./TaskDetailModal";
 import { ProjectMiniCalendar } from "./ProjectMiniCalendar";
+import { ProjectGoogleCalendarPanel } from "./ProjectGoogleCalendarPanel";
 import { extractRoleFromTags, tagsIncludeEmail, renderTemplate, normalizeRoleToStakeholder } from "@/lib/emailHelpers";
 import { extractEmailRolesFromTags, emailRoleLabel, emailRoleToStakeholder } from "@/lib/emailTagging";
 import type { EmailRecipientRole } from "@/lib/emailTagging";
@@ -294,6 +295,44 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
     }
   };
 
+  const addTask = async (title: string, dueDate: string) => {
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: Task = {
+      id: tempId,
+      title,
+      dueDate: new Date(dueDate).toISOString(),
+      status: "upcoming",
+      tags: null,
+      notes: null,
+      priority: false,
+    };
+    setTasks((prev) => [optimistic, ...prev]);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, dueDate }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error || "Unable to add task.");
+      }
+      const created: Task = {
+        id: body.id ?? tempId,
+        title: body.title ?? title,
+        dueDate: typeof body.dueDate === "string" ? body.dueDate : optimistic.dueDate,
+        status: body.status ?? "upcoming",
+        tags: body.tags ?? null,
+        notes: body.notes ?? null,
+        priority: body.priority ?? false,
+      };
+      setTasks((prev) => prev.map((t) => (t.id === tempId ? created : t)));
+    } catch (e) {
+      console.error(e);
+      setTasks((prev) => prev.filter((t) => t.id !== tempId));
+    }
+  };
+
   const deleteProject = async () => {
     if (!window.confirm("Are you sure?")) return;
     setIsDeletingProject(true);
@@ -375,10 +414,15 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
             onClientRoleChange={(role) => updateMyClientRole(role)}
           />
           <div className="mt-4">
+            <ProjectGoogleCalendarPanel />
+          </div>
+          <div className="mt-4">
             <ProjectMiniCalendar
               tasks={tasks}
               onOpenTask={(task) => openTaskFromCalendar(task.id)}
               onSetDueDate={(taskId, nextDate) => updateDueDate(taskId, nextDate)}
+              onDeleteTask={(taskId) => deleteTask(taskId)}
+              onAddTask={(title, dueDate) => addTask(title, dueDate)}
             />
           </div>
         </div>

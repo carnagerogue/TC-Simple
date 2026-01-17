@@ -14,6 +14,8 @@ type Props = {
   tasks: CalendarTask[];
   onOpenTask: (task: CalendarTask) => void;
   onSetDueDate: (taskId: string, nextDate: string) => void;
+  onDeleteTask: (taskId: string) => void;
+  onAddTask: (title: string, dueDate: string) => void;
 };
 
 const toDateKey = (date: Date) => {
@@ -29,10 +31,13 @@ const parseDueDate = (value: string | null) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-export function ProjectMiniCalendar({ tasks, onOpenTask, onSetDueDate }: Props) {
+export function ProjectMiniCalendar({ tasks, onOpenTask, onSetDueDate, onDeleteTask, onAddTask }: Props) {
   const today = useMemo(() => new Date(), []);
   const [currentMonth, setCurrentMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date(today));
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [editingDueId, setEditingDueId] = useState<string | null>(null);
+  const [dueDraft, setDueDraft] = useState<string>("");
 
   const tasksByDate = useMemo(() => {
     const map = new Map<string, CalendarTask[]>();
@@ -101,34 +106,75 @@ export function ProjectMiniCalendar({ tasks, onOpenTask, onSetDueDate }: Props) 
   const renderTaskRow = (task: CalendarTask, targetKey: string) => {
     const taskKey = task.dueDate ? toDateKey(new Date(task.dueDate)) : null;
     const isOnDate = taskKey === targetKey;
+    const isEditing = editingDueId === task.id;
     return (
       <div
         key={task.id}
-        className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
       >
-        <button
-          type="button"
-          onClick={() => onOpenTask(task)}
-          className="flex-1 text-left"
-        >
-          <p className="font-semibold text-slate-800">{task.title}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold">{task.status}</span>
-            {task.priority ? (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-600">
-                Priority
-              </span>
-            ) : null}
+        <div className="flex items-start justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => onOpenTask(task)}
+            className="flex-1 text-left"
+          >
+            <p className="font-semibold text-slate-800">{task.title}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold">{task.status}</span>
+              {task.priority ? (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-600">
+                  Priority
+                </span>
+              ) : null}
+            </div>
+          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setEditingDueId(task.id);
+                setDueDraft(taskKey || targetKey);
+              }}
+              className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Set due
+            </button>
+            <button
+              type="button"
+              onClick={() => onDeleteTask(task.id)}
+              className="rounded-md border border-red-200 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
+            >
+              Delete
+            </button>
           </div>
-        </button>
-        <button
-          type="button"
-          onClick={() => onSetDueDate(task.id, targetKey)}
-          disabled={isOnDate}
-          className="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-        >
-          {isOnDate ? "On date" : "Set due"}
-        </button>
+        </div>
+        {isEditing ? (
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="date"
+              value={dueDraft}
+              onChange={(e) => {
+                const value = e.target.value;
+                setDueDraft(value);
+                if (value) {
+                  onSetDueDate(task.id, value);
+                }
+                setEditingDueId(null);
+              }}
+              className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-700"
+            />
+            <button
+              type="button"
+              onClick={() => setEditingDueId(null)}
+              className="text-[11px] font-semibold text-slate-500 hover:text-slate-700"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+        {!isEditing && isOnDate ? (
+          <p className="mt-1 text-[11px] text-slate-500">Due on this date</p>
+        ) : null}
       </div>
     );
   };
@@ -214,6 +260,30 @@ export function ProjectMiniCalendar({ tasks, onOpenTask, onSetDueDate }: Props) 
           ) : (
             <span>No tasks due</span>
           )}
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Add task</p>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              placeholder="Task title"
+              className="flex-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const trimmed = newTaskTitle.trim();
+                if (!trimmed) return;
+                onAddTask(trimmed, selectedKey);
+                setNewTaskTitle("");
+              }}
+              className="rounded-md bg-[#0275ff] px-3 py-1 text-xs font-semibold text-white hover:bg-[#0169e6]"
+            >
+              Add
+            </button>
+          </div>
         </div>
 
         {selectedTasks.length ? (
