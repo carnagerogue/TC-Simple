@@ -183,8 +183,10 @@ export default function ContactsPage() {
                   if (!res.ok) {
                     const body = await res.json().catch(() => ({}));
                     const errMsg =
-                      body.error || "Google permissions expired. Please reconnect your Google account.";
-                    if (errMsg.toLowerCase().includes("no google oauth token")) {
+                      body.error ||
+                      body.detail ||
+                      "Google permissions expired. Please reconnect your Google account.";
+                    if (res.status === 401) {
                       setGoogleConnected(false);
                     }
                     throw new Error(errMsg);

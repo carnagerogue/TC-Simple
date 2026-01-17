@@ -1,12 +1,25 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getValidGoogleAccessToken } from "@/lib/google/tokenManager";
 import db from "@/lib/db";
 import { ensureDbReady } from "@/lib/db";
 import { buildContactPayload, fetchAllGoogleConnections, normalizePeopleConnections } from "@/lib/google/contacts";
+import { getGoogleClient } from "@/lib/google";
+import { getValidGoogleAccessToken } from "@/lib/google/tokenManager";
 
-export async function GET() {
+async function getAccessTokenWithFallback(request: NextRequest, userId: string): Promise<string> {
+  // Preferred path: use live NextAuth JWT token (and refresh_token) from the request cookies.
+  const googleClient = await getGoogleClient(request);
+  if (!("error" in googleClient)) {
+    const accessToken = await googleClient.oauth2Client.getAccessToken();
+    if (accessToken?.token) return accessToken.token;
+  }
+
+  // Fallback: use persisted token record (helps if JWT doesn't include access_token for some reason)
+  return await getValidGoogleAccessToken(userId);
+}
+
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id || session?.user?.email || null;
   if (!userId) {
@@ -15,11 +28,11 @@ export async function GET() {
   await ensureDbReady();
 
   try {
-    const accessToken = await getValidGoogleAccessToken(userId);
+    const accessToken = await getAccessTokenWithFallback(request, userId);
     if (!accessToken) {
       return NextResponse.json(
-        { error: "No Google access token. Please reconnect your Google account." },
-        { status: 400 }
+        { error: "Google connection missing. Please reconnect your Google account." },
+        { status: 401 }
       );
     }
 
@@ -174,13 +187,11 @@ export async function GET() {
     });
   } catch (e: unknown) {
     console.error("sync-gmail error", e);
-    const error = e as { message?: string };
+    const message = e instanceof Error ? e.message : "unknown error";
+    const isAuth = /permission|expired|oauth|401|403/i.test(message);
     return NextResponse.json(
-      {
-        error: "Unable to sync Gmail contacts",
-        detail: error.message ?? "unknown error",
-      },
-      { status: 500 }
+      { error: isAuth ? "Google permissions expired. Please reconnect your Google account." : "Unable to sync Gmail contacts", detail: message },
+      { status: isAuth ? 401 : 500 }
     );
   }
 }
