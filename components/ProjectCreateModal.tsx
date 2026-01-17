@@ -11,6 +11,7 @@ type Props = {
 export function ProjectCreateModal({ open, onClose, onSubmit }: Props) {
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const isValid = name.trim().length > 0;
 
   if (!open) return null;
 
@@ -37,7 +38,7 @@ export function ProjectCreateModal({ open, onClose, onSubmit }: Props) {
           </button>
           <button
             type="button"
-            disabled={!name.trim() || submitting}
+            disabled={!isValid || submitting}
             onClick={async () => {
               setSubmitting(true);
               try {
@@ -47,7 +48,11 @@ export function ProjectCreateModal({ open, onClose, onSubmit }: Props) {
                 setSubmitting(false);
               }
             }}
-            className="rounded-lg bg-[#9bc4ff] px-4 py-2 text-sm font-semibold text-white shadow hover:bg-[#82b4ff] disabled:opacity-60"
+            className={`rounded-lg px-4 py-2 text-sm font-semibold text-white shadow transition ${
+              isValid && !submitting
+                ? "bg-[#0f6ae8] hover:bg-[#0c5ecb] cursor-pointer shadow-blue-500/30"
+                : "bg-[#9bc4ff] cursor-not-allowed opacity-60"
+            }`}
           >
             {submitting ? "Creating..." : "Create Project"}
           </button>
