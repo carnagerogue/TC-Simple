@@ -265,7 +265,7 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
         onMouseDown={handleMouseDown}
         tabIndex={0}
         ref={containerRef}
-        className={`relative flex w-full items-start justify-center overflow-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9bc4ff] ${
+        className={`relative w-full overflow-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9bc4ff] ${
           visualZoom > 1 ? "cursor-grab active:cursor-grabbing select-none" : ""
         }`}
         style={{ ...containerStyle, WebkitOverflowScrolling: "touch" }}
@@ -279,12 +279,12 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
           }}
         >
           <div
-            className="absolute left-1/2 top-0 transition-transform duration-150"
+            className="absolute left-0 top-0 transition-transform duration-150"
             style={{
               width: pageSize?.width ? `${pageSize.width}px` : "100%",
               height: pageSize?.height ? `${pageSize.height}px` : "100%",
-              transform: `translateX(-50%) scale(${visualZoom})`,
-              transformOrigin: "top center",
+              transform: `scale(${visualZoom})`,
+              transformOrigin: "top left",
             }}
           >
             <canvas ref={canvasRef} className="block" />
