@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProjectCreateModal } from "@/components/ProjectCreateModal";
+import { TaskTagPills } from "@/components/TaskTagPills";
 import { generateTasksFromParsed } from "@/lib/taskGenerator";
 import { labelForField } from "@/lib/projectTaskTemplates";
 
@@ -29,49 +30,6 @@ function formatTags(t: GeneratedTask) {
   return "no-email";
 }
 
-function renderTagPills(tags?: string) {
-  if (!tags) return null;
-  const parts = tags
-    .split(",")
-    .map((p) => p.trim())
-    .filter((p) => p && p !== "no-email");
-  const colorFor = (tag: string) => {
-    switch (tag) {
-      case "confirm":
-      case "review":
-        return "bg-emerald-100 text-emerald-700";
-      case "document":
-        return "bg-blue-50 text-blue-700";
-      case "email":
-        return "bg-[#eaf2ff] text-[#1b4c96]";
-      case "call":
-        return "bg-orange-100 text-orange-700";
-      case "buyer":
-      case "seller":
-        return "bg-purple-100 text-purple-700";
-      case "title":
-      case "title_company":
-        return "bg-sky-100 text-sky-700";
-      case "request":
-        return "bg-amber-100 text-amber-700";
-      case "reminder":
-        return "bg-pink-100 text-pink-700";
-      case "coordinate":
-        return "bg-lime-100 text-lime-700";
-      default:
-        return "bg-gray-100 text-gray-700";
-    }
-  };
-  return (
-    <div className="mt-1 flex flex-wrap gap-2">
-      {parts.map((tag) => (
-        <span key={tag} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${colorFor(tag)}`}>
-          {tag}
-        </span>
-      ))}
-    </div>
-  );
-}
 
 export default function NewProjectPage() {
   const router = useRouter();
@@ -125,7 +83,7 @@ export default function NewProjectPage() {
             requiresEmail: false,
             emailRecipientRole: null,
             selected: true,
-            tags: "document",
+            tags: undefined,
           }))
         );
       } else {
@@ -230,7 +188,7 @@ export default function NewProjectPage() {
                       {task.requiresEmail ? (
                         <p className="text-xs text-[#1b4c96]">Email to {task.emailRecipientRole}</p>
                       ) : null}
-                      {renderTagPills(task.tags)}
+                      <TaskTagPills tags={task.tags} />
                     </div>
                   </div>
                 </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { TASK_TAG_SUGGESTIONS, getTagLabel } from "@/lib/taskTags";
 
 type Props = {
   open: boolean;
@@ -8,21 +9,6 @@ type Props = {
   onClose: () => void;
   onSave: (tags: string) => Promise<void> | void;
 };
-
-const tagSuggestions = [
-  "confirm",
-  "review",
-  "email",
-  "call",
-  "buyer",
-  "seller",
-  "agent",
-  "title company",
-  "hoa",
-  "request",
-  "reminder",
-  "coordinate",
-];
 
 export function TagEditModal({ open, initialTags, onClose, onSave }: Props) {
   const [value, setValue] = useState(initialTags || "");
@@ -40,12 +26,12 @@ export function TagEditModal({ open, initialTags, onClose, onSave }: Props) {
         <p className="mt-1 text-sm text-gray-500">Add tags separated by commas.</p>
         <input
           className="mt-4 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#9bc4ff] focus:outline-none"
-          placeholder="e.g., email, buyer, title company"
+          placeholder="e.g., buyer_client, escrow, closing"
           value={value}
           onChange={(e) => setValue(e.target.value)}
         />
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          {tagSuggestions.map((t) => (
+          {TASK_TAG_SUGGESTIONS.map((t) => (
             <button
               key={t}
               type="button"
@@ -58,7 +44,7 @@ export function TagEditModal({ open, initialTags, onClose, onSave }: Props) {
               }}
               className="rounded-full bg-[#eaf2ff] px-3 py-1 text-[#1b4c96] hover:bg-[#d7e8ff]"
             >
-              {t}
+              {getTagLabel(t)}
             </button>
           ))}
         </div>

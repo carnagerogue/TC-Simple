@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { TaskTagPills } from "@/components/TaskTagPills";
 
 type TaskDetailModalProps = {
   open: boolean;
@@ -53,16 +54,10 @@ export function TaskDetailModal({
               {due ? <span>Due {due}</span> : null}
             </div>
             {tags ? (
-              <p className="mt-1 text-xs text-slate-500">
-                Tags:{" "}
-                <span className="font-semibold text-slate-700">
-                  {tags
-                    .split(",")
-                    .map((t) => t.trim())
-                    .filter(Boolean)
-                    .join(", ")}
-                </span>
-              </p>
+              <div className="mt-1">
+                <p className="text-xs text-slate-500">Tags</p>
+                <TaskTagPills tags={tags} />
+              </div>
             ) : null}
           </div>
           <button

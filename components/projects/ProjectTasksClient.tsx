@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { ProjectTaskCard } from "./ProjectTaskCard";
 import { ProjectStakeholderList, Stakeholder } from "./ProjectStakeholderList";
 import { EmailDraftModal } from "./EmailDraftModal";
+import { TagEditModal } from "./TagEditModal";
+import { TaskDetailModal } from "./TaskDetailModal";
 import { extractRoleFromTags, tagsIncludeEmail, renderTemplate, normalizeRoleToStakeholder } from "@/lib/emailHelpers";
 
 type Task = {
@@ -35,7 +37,11 @@ type Props = {
 export function ProjectTasksClient({ projectId, initialProject, initialTasks }: Props) {
   const [project] = useState<Project>(initialProject);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [, setDetailModal] = useState<{ open: boolean; task: Task | null }>({
+  const [detailModal, setDetailModal] = useState<{ open: boolean; task: Task | null }>({
+    open: false,
+    task: null,
+  });
+  const [tagModal, setTagModal] = useState<{ open: boolean; task: Task | null }>({
     open: false,
     task: null,
   });
@@ -165,13 +171,89 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
     loadStakeholders();
   }, [loadStakeholders, stakeholderRefreshKey]);
 
+  const patchLocalTask = useCallback((taskId: string, patch: Partial<Task>) => {
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...patch } : t)));
+  }, []);
+
+  const updateTask = useCallback(
+    async (taskId: string, payload: Record<string, unknown>) => {
+      const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error || "Unable to update task.");
+      }
+      return body;
+    },
+    [projectId]
+  );
+
   const toggleStatus = async (taskId: string, next: boolean) => {
-    await fetch(`/api/projects/${projectId}/tasks/${taskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: next ? "completed" : "upcoming" }),
-    });
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: next ? "completed" : "upcoming" } : t)));
+    const previous = tasks.find((t) => t.id === taskId)?.status || "upcoming";
+    patchLocalTask(taskId, { status: next ? "completed" : "upcoming" });
+    try {
+      await updateTask(taskId, { status: next ? "completed" : "upcoming" });
+    } catch (e) {
+      patchLocalTask(taskId, { status: previous });
+      console.error(e);
+    }
+  };
+
+  const togglePriority = async (taskId: string, next: boolean) => {
+    const previous = tasks.find((t) => t.id === taskId)?.priority ?? false;
+    patchLocalTask(taskId, { priority: next });
+    try {
+      await updateTask(taskId, { priority: next });
+    } catch (e) {
+      patchLocalTask(taskId, { priority: previous });
+      console.error(e);
+    }
+  };
+
+  const updateDueDate = async (taskId: string, nextDueDate: string | null) => {
+    const previous = tasks.find((t) => t.id === taskId)?.dueDate ?? null;
+    const nextIso = nextDueDate ? new Date(nextDueDate).toISOString() : null;
+    patchLocalTask(taskId, { dueDate: nextIso });
+    try {
+      await updateTask(taskId, { dueDate: nextDueDate });
+    } catch (e) {
+      patchLocalTask(taskId, { dueDate: previous });
+      throw e;
+    }
+  };
+
+  const updateTags = async (taskId: string, nextTags: string) => {
+    const previous = tasks.find((t) => t.id === taskId)?.tags ?? null;
+    const normalized = nextTags
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0 && t.toLowerCase() !== "ai")
+      .join(", ");
+    patchLocalTask(taskId, { tags: normalized || null });
+    try {
+      await updateTask(taskId, { tags: normalized || null });
+    } catch (e) {
+      patchLocalTask(taskId, { tags: previous });
+      throw e;
+    }
+  };
+
+  const deleteTask = async (taskId: string) => {
+    const previous = tasks;
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Unable to delete task.");
+      }
+    } catch (e) {
+      setTasks(previous);
+      console.error(e);
+    }
   };
 
   const deleteProject = async () => {
@@ -202,16 +284,17 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
                 {...task}
                 tags={task.tags ?? undefined}
                 onToggle={(checked) => toggleStatus(task.id, checked)}
-                onDelete={() => {}}
-                onEditTags={() => {}}
+                onDelete={() => deleteTask(task.id)}
+                onEditTags={() => setTagModal({ open: true, task })}
                 onOpen={() => setDetailModal({ open: true, task })}
                 onDraftEmail={() => openDraftForTask(task)}
                 onAddStakeholder={() => setForceStakeholderModal(true)}
                 emailRecipientLabel={recipientLabel(task)}
                 hasEmail={tagsIncludeEmail(task.tags)}
-                onTogglePriority={() => {}}
-                onDueDateChange={async () => {}}
+                onTogglePriority={() => togglePriority(task.id, !(task.priority ?? false))}
+                onDueDateChange={(next) => updateDueDate(task.id, next)}
                 emailMissing={tagsIncludeEmail(task.tags) && !recipientLabel(task)}
+                notesPreview={task.notes ?? undefined}
               />
             ))}
           </div>
@@ -243,6 +326,44 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
         projectId={projectId}
         stakeholders={stakeholders}
         projectSummary={project.summary || {}}
+      />
+
+      <TaskDetailModal
+        open={detailModal.open}
+        title={detailModal.task?.title || ""}
+        status={detailModal.task?.status || "upcoming"}
+        dueDate={detailModal.task?.dueDate || null}
+        tags={detailModal.task?.tags || ""}
+        notes={detailModal.task?.notes || ""}
+        onClose={() => setDetailModal({ open: false, task: null })}
+        onSave={async (notes) => {
+          const taskId = detailModal.task?.id;
+          if (!taskId) return;
+          patchLocalTask(taskId, { notes });
+          try {
+            await updateTask(taskId, { notes });
+          } catch (e) {
+            console.error(e);
+          } finally {
+            setDetailModal({ open: false, task: null });
+          }
+        }}
+      />
+
+      <TagEditModal
+        open={tagModal.open}
+        initialTags={tagModal.task?.tags || ""}
+        onClose={() => setTagModal({ open: false, task: null })}
+        onSave={async (nextTags) => {
+          const taskId = tagModal.task?.id;
+          if (!taskId) return;
+          try {
+            await updateTags(taskId, nextTags);
+            setTagModal({ open: false, task: null });
+          } catch (e) {
+            console.error(e);
+          }
+        }}
       />
     </div>
   );

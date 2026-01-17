@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TaskTagPills } from "@/components/TaskTagPills";
 
 type ProjectTaskCardProps = {
   title: string;
@@ -55,50 +56,6 @@ export function ProjectTaskCard({
   useEffect(() => {
     setDraftDue(dueDate ? dueDate.slice(0, 10) : "");
   }, [dueDate]);
-  const renderTags = () => {
-    if (!tags) return null;
-    const parts = tags
-      .split(",")
-      .map((p) => p.trim())
-      .filter((p) => p && p !== "no-email");
-    const colorFor = (tag: string) => {
-      switch (tag) {
-        case "confirm":
-        case "review":
-          return "bg-emerald-100 text-emerald-700";
-        case "document":
-          return "bg-blue-50 text-blue-700";
-        case "email":
-          return "bg-[#eaf2ff] text-[#1b4c96]";
-        case "call":
-          return "bg-orange-100 text-orange-700";
-        case "buyer":
-        case "seller":
-          return "bg-purple-100 text-purple-700";
-        case "title":
-        case "title_company":
-        case "escrow":
-          return "bg-sky-100 text-sky-700";
-        case "request":
-          return "bg-amber-100 text-amber-700";
-        case "reminder":
-          return "bg-pink-100 text-pink-700";
-        case "coordinate":
-          return "bg-lime-100 text-lime-700";
-        default:
-          return "bg-gray-100 text-gray-700";
-      }
-    };
-    return (
-      <div className="mt-1 flex flex-wrap gap-2">
-        {parts.map((tag) => (
-          <span key={tag} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${colorFor(tag)}`}>
-            {tag}
-          </span>
-        ))}
-      </div>
-    );
-  };
   return (
     <div
       role="button"
@@ -227,7 +184,7 @@ export function ProjectTaskCard({
               ) : null}
             </p>
           ) : null}
-          {renderTags()}
+          <TaskTagPills tags={tags} />
           {notesPreview ? (
             <p className="mt-1 text-xs text-slate-500 line-clamp-2">
               {notesPreview.length > 50 ? `${notesPreview.slice(0, 50)}…` : notesPreview}
@@ -258,12 +215,13 @@ export function ProjectTaskCard({
             e.stopPropagation();
             onTogglePriority?.();
           }}
-          className={`rounded-md border px-2 py-1 text-sm ${
+          className={`rounded-md border px-2 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9bc4ff] ${
             priority
               ? "border-amber-300 bg-amber-50 text-amber-600"
               : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
           }`}
           title="Star / Priority"
+          aria-label="Toggle priority"
         >
           {priority ? "★" : "☆"}
         </button>
@@ -273,8 +231,9 @@ export function ProjectTaskCard({
             e.stopPropagation();
             onEditTags?.();
           }}
-          className="rounded-md border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-100"
+          className="rounded-md border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9bc4ff]"
           title="Edit tags"
+          aria-label="Edit tags"
         >
           ✏️
         </button>

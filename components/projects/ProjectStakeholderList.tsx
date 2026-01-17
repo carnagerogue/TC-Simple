@@ -289,6 +289,11 @@ export function ProjectStakeholderList({
           const name = [g.contact.firstName, g.contact.lastName].filter(Boolean).join(" ");
           const rolesSet = new Set(g.roles);
           const isExpanded = expandedContactId === g.contact.id;
+          const isAgent =
+            g.contact.category === "AGENT" ||
+            g.roles.includes("BUYER_AGENT") ||
+            g.roles.includes("SELLER_AGENT");
+
           return (
             <div key={g.contact.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -314,19 +319,76 @@ export function ProjectStakeholderList({
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Party Type</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        {isAgent ? "Agent Representation" : "Party Type"}
+                      </p>
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => toggleRole(g.contact.id, "BUYER", rolesSet.has("BUYER"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("BUYER") ? "bg-slate-900 text-white" : "bg-white text-slate-700"}`}>Buyer</button>
-                        <button type="button" onClick={() => toggleRole(g.contact.id, "SELLER", rolesSet.has("SELLER"))} className={`rounded-full border px-3 py-1 text-xs font-semibold ${rolesSet.has("SELLER") ? "bg-slate-900 text-white" : "bg-white text-slate-700"}`}>Seller</button>
+                        {isAgent ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => toggleRole(g.contact.id, "BUYER_AGENT", rolesSet.has("BUYER_AGENT"))}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                rolesSet.has("BUYER_AGENT") ? "bg-slate-900 text-white" : "bg-white text-slate-700"
+                              }`}
+                            >
+                              Buyer Agent
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleRole(g.contact.id, "SELLER_AGENT", rolesSet.has("SELLER_AGENT"))}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                rolesSet.has("SELLER_AGENT") ? "bg-slate-900 text-white" : "bg-white text-slate-700"
+                              }`}
+                            >
+                              Seller Agent
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => toggleRole(g.contact.id, "BUYER", rolesSet.has("BUYER"))}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                rolesSet.has("BUYER") ? "bg-slate-900 text-white" : "bg-white text-slate-700"
+                              }`}
+                            >
+                              Buyer
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleRole(g.contact.id, "SELLER", rolesSet.has("SELLER"))}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                rolesSet.has("SELLER") ? "bg-slate-900 text-white" : "bg-white text-slate-700"
+                              }`}
+                            >
+                              Seller
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Client Action</p>
-                      <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => assignAsClient(g.contact.id, "BUYER")} className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Set as My Client (Buyer)</button>
-                        <button type="button" onClick={() => assignAsClient(g.contact.id, "SELLER")} className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Set as My Client (Seller)</button>
+                    {!isAgent ? (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Client Action</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => assignAsClient(g.contact.id, "BUYER")}
+                            className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+                          >
+                            Set as My Client (Buyer)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => assignAsClient(g.contact.id, "SELLER")}
+                            className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+                          >
+                            Set as My Client (Seller)
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
                   </div>
                 </div>
               )}
