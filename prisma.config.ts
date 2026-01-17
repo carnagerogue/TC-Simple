@@ -10,6 +10,8 @@ function isPostgresUrl(url: string | undefined | null): url is string {
 function pickDatabaseUrl(): string {
   // Prefer platform-provided Postgres URLs (Vercel Postgres / Neon / etc).
   const candidates = [
+    process.env.PRISMA_DATABASE_URL,
+    process.env.PRISMA_DATABASE_URL_NON_POOLING,
     process.env.POSTGRES_PRISMA_URL,
     process.env.POSTGRES_URL_NON_POOLING,
     process.env.POSTGRES_URL,
