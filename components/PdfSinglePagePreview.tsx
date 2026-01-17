@@ -10,23 +10,11 @@ type Props = {
   zoom?: number;
 };
 
-type PdfDoc = {
-  numPages: number;
-  getPage: (pageNumber: number) => Promise<{
-    getViewport: (opts: { scale: number }) => { width: number; height: number };
-    render: (opts: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => {
-      promise: Promise<void>;
-      cancel?: () => void;
-    };
-  }>;
-  destroy?: () => void;
-};
-
 export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderTaskRef = useRef<{ cancel?: () => void } | null>(null);
   const scrollLockRef = useRef(0);
-  const [doc, setDoc] = useState<PdfDoc | null>(null);
+  const [doc, setDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [numPages, setNumPages] = useState(0);
   const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
@@ -59,7 +47,7 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
           loaded.destroy?.();
           return;
         }
-        setDoc(loaded as PdfDoc);
+        setDoc(loaded);
         setNumPages(loaded.numPages);
         setPageNumber(1);
       })

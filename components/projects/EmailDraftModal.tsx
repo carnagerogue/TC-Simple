@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { TemplateCategory } from "@prisma/client";
 import { renderTemplate, validatePlaceholders } from "@/lib/emailTemplates";
 import { TemplateModal } from "@/components/email-templates/TemplateModal";
@@ -204,6 +204,24 @@ export function EmailDraftModal({
     });
   }, [filteredTemplates, contextRole, subject, body, tags]);
 
+  const handleUseTemplate = useCallback(
+    (tmpl: Template, force = false) => {
+      const hasEdits = (subj || "").trim().length || (msg || "").trim().length;
+      if (hasEdits && !force) {
+        const confirmed = confirm("Replace current draft with selected template?");
+        if (!confirmed) return;
+      }
+      const renderedSubject = renderTemplate(tmpl.subject, { summary: projectSummary, myClientRole: null }, stakeholders);
+      const renderedBody = renderTemplate(tmpl.body, { summary: projectSummary, myClientRole: null }, stakeholders);
+      setSubj(renderedSubject);
+      setMsg(renderedBody);
+      setSelectedTemplate(tmpl);
+      setHasEdited(false);
+      onTemplateUsed?.(tmpl.id);
+    },
+    [msg, onTemplateUsed, projectSummary, stakeholders, subj]
+  );
+
   useEffect(() => {
     if (!open) return;
     const role = (contextRole || "").toLowerCase();
@@ -225,7 +243,7 @@ export function EmailDraftModal({
     if (preferred) {
       handleUseTemplate(preferred, true);
     }
-  }, [open, selectedTemplate, hasEdited, templates, templateId, recommendedTemplates, filteredTemplates]);
+  }, [open, selectedTemplate, hasEdited, templates, templateId, recommendedTemplates, filteredTemplates, handleUseTemplate]);
 
   const renderedPreview = useMemo(() => {
     if (!selectedTemplate) return { subject: "", body: "" };
@@ -273,20 +291,7 @@ export function EmailDraftModal({
     }
   };
 
-  const handleUseTemplate = (tmpl: Template, force = false) => {
-    const hasEdits = (subj || "").trim().length || (msg || "").trim().length;
-    if (hasEdits && !force) {
-      const confirmed = confirm("Replace current draft with selected template?");
-      if (!confirmed) return;
-    }
-    const renderedSubject = renderTemplate(tmpl.subject, { summary: projectSummary, myClientRole: null }, stakeholders);
-    const renderedBody = renderTemplate(tmpl.body, { summary: projectSummary, myClientRole: null }, stakeholders);
-    setSubj(renderedSubject);
-    setMsg(renderedBody);
-    setSelectedTemplate(tmpl);
-    setHasEdited(false);
-    onTemplateUsed?.(tmpl.id);
-  };
+  
 
   useEffect(() => {
     const validation = validatePlaceholders(`${subj}\n${msg}`);

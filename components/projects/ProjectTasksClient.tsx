@@ -8,6 +8,7 @@ import { TagEditModal } from "./TagEditModal";
 import { TaskDetailModal } from "./TaskDetailModal";
 import { extractRoleFromTags, tagsIncludeEmail, renderTemplate, normalizeRoleToStakeholder } from "@/lib/emailHelpers";
 import { extractEmailRolesFromTags, emailRoleLabel, emailRoleToStakeholder } from "@/lib/emailTagging";
+import type { EmailRecipientRole } from "@/lib/emailTagging";
 
 type Task = {
   id: string;
@@ -104,12 +105,9 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
     const emailRoles = extractEmailRolesFromTags(task.tags);
     if (emailRoles.length === 0 && !tagsIncludeEmail(task.tags)) return [];
 
-    const roles = emailRoles.length
-      ? emailRoles
-      : (() => {
-          const roleTag = extractRoleFromTags(task.tags);
-          return roleTag ? [roleTag as any] : [];
-        })();
+    const roleTag = extractRoleFromTags(task.tags);
+    const isEmailRole = emailRoles.length > 0;
+    const roles: Array<EmailRecipientRole | string> = isEmailRole ? emailRoles : roleTag ? [roleTag] : [];
 
     const candidates: Array<{
       id: string;
@@ -121,7 +119,7 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
 
     const addCandidate = (roleKey: string, stakeholder: Stakeholder) => {
       const name = [stakeholder.contact.firstName, stakeholder.contact.lastName].filter(Boolean).join(" ");
-      const label = emailRoles.length ? emailRoleLabel(roleKey as any) : roleKey;
+      const label = isEmailRole ? emailRoleLabel(roleKey as EmailRecipientRole) : roleKey;
       candidates.push({
         id: `${roleKey}:${stakeholder.contact.id}`,
         email: stakeholder.contact.email,
@@ -133,7 +131,7 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
 
     roles.forEach((roleKey) => {
       const normalized = normalizeRoleToStakeholder(roleKey?.toUpperCase()) || normalizeRoleToStakeholder(roleKey || "");
-      const targetRole = emailRoles.length ? emailRoleToStakeholder(roleKey as any) : normalized;
+      const targetRole = isEmailRole ? emailRoleToStakeholder(roleKey as EmailRecipientRole) : normalized;
       if (!targetRole) return;
 
       const sameRole = stakeholders.filter((s) => s.role === targetRole);
@@ -325,7 +323,8 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
                 : candidates.length > 1
                 ? "Select recipient"
                 : null;
-              const emailMissing = emailEnabled && (candidates.length === 0 || (recipient && !recipient.email));
+              const emailMissing =
+                emailEnabled && (candidates.length === 0 || (!!recipient && !recipient.email));
               return (
               <ProjectTaskCard
                 key={task.id}
