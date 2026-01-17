@@ -59,6 +59,8 @@ export function UploadForm() {
   const [parsedTasks, setParsedTasks] = useState<ParsedTaskItem[]>([]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [ctaHighlight, setCtaHighlight] = useState(false);
+  const [isRerunningAi, setIsRerunningAi] = useState(false);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
   const parsedSectionRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
@@ -114,6 +116,7 @@ export function UploadForm() {
     setDocumentId(null);
     setParsedItems([]);
     setParsedTasks([]);
+    setAiNotice(null);
 
     try {
       const formData = new FormData();
@@ -182,6 +185,37 @@ export function UploadForm() {
       setStatus({ type: "error", message });
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const rerunAiSuggestions = async () => {
+    if (!documentId) return;
+    setIsRerunningAi(true);
+    setAiNotice(null);
+    try {
+      const res = await fetch(`/api/documents/${documentId}/parse`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const body = (await res.json().catch(() => ({}))) as { parsedData?: unknown; error?: string };
+      if (!res.ok) {
+        throw new Error(body.error || "Unable to re-run AI suggestions.");
+      }
+      const parsed =
+        body.parsedData && typeof body.parsedData === "object" && !Array.isArray(body.parsedData)
+          ? (body.parsedData as Record<string, unknown>)
+          : null;
+      if (parsed?.tasks) {
+        setParsedTasks(parseTasks(parsed.tasks));
+        setAiNotice("AI suggestions updated. Review before creating the project.");
+      } else {
+        setAiNotice("AI suggestions updated.");
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Unable to re-run AI suggestions.";
+      setAiNotice(message);
+    } finally {
+      setIsRerunningAi(false);
     }
   };
 
@@ -327,12 +361,38 @@ export function UploadForm() {
             </div>
 
             <div className="space-y-3">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Actionable Tasks (from OpenAI)</p>
-                <p className="text-xs text-gray-500">
-                  Review and adjust tasks that were generated from the PDF.
-                </p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-gray-900">AI Suggested Tasks</p>
+                    <span
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-[10px] font-semibold text-slate-500"
+                      title="These are suggested tasks based on the PDF. You can edit them or add your own before creating the project."
+                    >
+                      i
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Generated from the uploaded PDF. Review, edit, and include only what you want before creating the project.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={rerunAiSuggestions}
+                  disabled={!documentId || isRerunningAi}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  {isRerunningAi ? "Re-running..." : "Re-run AI suggestions"}
+                </button>
               </div>
+              <p className="text-xs text-slate-500">
+                Adding a task here creates a manual task. AI will not re-run unless you click the button above.
+              </p>
+              {aiNotice ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  {aiNotice}
+                </div>
+              ) : null}
               <ParsedTaskList tasks={parsedTasks} onChange={setParsedTasks} />
             </div>
           </div>
@@ -341,17 +401,20 @@ export function UploadForm() {
 
       {/* Removed old follow-up task section */}
 
-      {status.type === "success" && (parsedItems.length > 0 || parsedTasks.some((t) => t.checked)) ? (
+      {status.type === "success" && (parsedItems.length > 0 || parsedTasks.some((t) => t.included)) ? (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-md flex justify-end">
           <button
             type="button"
-            disabled={parsedItems.filter((p) => p.selected).length === 0 && parsedTasks.filter((t) => t.checked).length === 0}
+            disabled={
+              parsedItems.filter((p) => p.selected).length === 0 &&
+              parsedTasks.filter((t) => t.included).length === 0
+            }
             onClick={() => {
               const payload = {
                 items: parsedItems,
                 transactionId,
                 documentId,
-                tasks: parsedTasks.filter((t) => t.checked).map((t) => t.label),
+                tasks: parsedTasks.filter((t) => t.included),
               };
               if (typeof window !== "undefined") {
                 sessionStorage.setItem("tc-simple-new-project", JSON.stringify(payload));

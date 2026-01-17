@@ -21,6 +21,7 @@ type GeneratedTask = {
   emailRecipientRole: "buyer" | "seller" | "lender" | "title_company" | null;
   selected: boolean;
   tags?: string;
+  source?: "ai" | "manual";
 };
 
 function formatTags(t: GeneratedTask) {
@@ -71,19 +72,39 @@ export default function NewProjectPage() {
       const defaultName = [buyer, address].filter(Boolean).join(" / ") || "New Project";
       setProjectName(defaultName);
 
+      const providedTaskObjects = Array.isArray(parsed.tasks)
+        ? parsed.tasks
+            .map((t) => {
+              if (!t || typeof t !== "object") return null;
+              const label = typeof (t as { label?: unknown }).label === "string" ? (t as { label?: string }).label : "";
+              const included =
+                typeof (t as { included?: unknown }).included === "boolean"
+                  ? (t as { included?: boolean }).included
+                  : true;
+              const source =
+                (t as { source?: unknown }).source === "manual" ? "manual" : "ai";
+              return label ? { label, included, source } : null;
+            })
+            .filter((t): t is { label: string; included: boolean; source: "ai" | "manual" } => Boolean(t))
+        : [];
+
       const providedTaskStrings = Array.isArray(parsed.tasks)
         ? parsed.tasks.filter((t): t is string => typeof t === "string" && t.trim().length > 0)
         : [];
 
-      if (providedTaskStrings.length > 0) {
+      if (providedTaskObjects.length > 0 || providedTaskStrings.length > 0) {
+        const seed = providedTaskObjects.length
+          ? providedTaskObjects.map((t) => ({ title: t.label, selected: t.included, source: t.source }))
+          : providedTaskStrings.map((title) => ({ title, selected: true, source: "ai" as const }));
+
         setTasks(
-          providedTaskStrings.map((title) => ({
-            title,
+          seed.map((t) => ({
+            title: t.title,
             dueDate: null,
             requiresEmail: false,
             emailRecipientRole: null,
-            selected: true,
-            tags: undefined,
+            selected: t.selected,
+            source: t.source,
           }))
         );
       } else {
@@ -177,6 +198,7 @@ export default function NewProjectPage() {
                       readOnly
                       checked={task.selected}
                       className="h-4 w-4 rounded border-[#9bc4ff] text-[#9bc4ff]"
+                      aria-label={`Include ${task.title} in project`}
                     />
                     <div>
                       <p className="text-sm font-semibold text-gray-900">{task.title}</p>
@@ -187,6 +209,17 @@ export default function NewProjectPage() {
                       ) : null}
                       {task.requiresEmail ? (
                         <p className="text-xs text-[#1b4c96]">Email to {task.emailRecipientRole}</p>
+                      ) : null}
+                      {task.source ? (
+                        <span
+                          className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                            task.source === "manual"
+                              ? "bg-slate-100 text-slate-700"
+                              : "bg-[#eaf2ff] text-[#1b4c96]"
+                          }`}
+                        >
+                          {task.source === "manual" ? "Manual task" : "AI suggested"}
+                        </span>
                       ) : null}
                       <TaskTagPills tags={task.tags} />
                     </div>

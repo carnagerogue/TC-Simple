@@ -3,7 +3,8 @@ import { nanoid } from "nanoid";
 export type ParsedTaskItem = {
   id: string;
   label: string;
-  checked: boolean;
+  included: boolean;
+  source: "ai" | "manual";
 };
 
 export function parseTasks(tasks: unknown): ParsedTaskItem[] {
@@ -22,7 +23,8 @@ export function parseTasks(tasks: unknown): ParsedTaskItem[] {
     .map((label) => ({
       id: nanoid(),
       label,
-      checked: true,
+      included: true,
+      source: "ai" as const,
     }));
 }
 
