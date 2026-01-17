@@ -92,18 +92,19 @@ export default async function DashboardPage() {
     });
 
     return (
-      <div className="flex w-full flex-col gap-6 px-6 pb-10">
-        <div className="flex items-center justify-between rounded-3xl border border-slate-200/60 bg-white/80 px-6 py-5 shadow-sm backdrop-blur">
+      <div className="relative flex w-full flex-col gap-6 px-4 pb-12 sm:px-6 lg:px-8">
+        <div className="pointer-events-none absolute inset-x-0 -top-10 h-40 bg-[radial-gradient(circle_at_top,rgba(15,106,232,0.14),transparent_60%)]" />
+        <div className="relative flex items-center justify-between rounded-3xl border border-slate-200/40 bg-white/70 px-6 py-5 shadow-[0_20px_50px_-35px_rgba(15,106,232,0.35)] backdrop-blur transition hover:shadow-[0_24px_70px_-40px_rgba(15,106,232,0.45)]">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Dashboard</p>
-            <h1 className="text-3xl font-semibold">Good morning, {session?.user?.name || "there"}</h1>
-            <p className="text-sm text-slate-500">
+            <h1 className="text-3xl font-semibold text-slate-900">Good morning, {session?.user?.name || "there"}</h1>
+            <p className="text-sm text-slate-500/90">
               {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
             </p>
           </div>
           <Link
             href="/upload"
-            className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800"
+            className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800"
           >
             Start new document
           </Link>
@@ -126,24 +127,24 @@ export default async function DashboardPage() {
         ) : null}
 
         <div className="grid gap-4 lg:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200/60 bg-white/80 p-5 shadow-sm backdrop-blur">
+          <div className="rounded-2xl border border-slate-200/40 bg-white/70 p-5 shadow-[0_14px_30px_-28px_rgba(15,106,232,0.35)] backdrop-blur transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-28px_rgba(15,106,232,0.4)]">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Live transactions</p>
-            <h3 className="text-2xl font-semibold mt-1">{transactions.length}</h3>
+            <h3 className="mt-2 text-2xl font-semibold text-slate-900">{transactions.length}</h3>
             <p className="text-sm text-slate-500">Active intake files</p>
           </div>
-          <div className="rounded-2xl border border-slate-200/60 bg-white/80 p-5 shadow-sm backdrop-blur">
+          <div className="rounded-2xl border border-slate-200/40 bg-white/70 p-5 shadow-[0_14px_30px_-28px_rgba(15,106,232,0.35)] backdrop-blur transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-28px_rgba(15,106,232,0.4)]">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Active projects</p>
-            <h3 className="text-2xl font-semibold mt-1">{activeProjects.length}</h3>
+            <h3 className="mt-2 text-2xl font-semibold text-slate-900">{activeProjects.length}</h3>
             <p className="text-sm text-slate-500">In progress task boards</p>
           </div>
-          <div className="rounded-2xl border border-slate-200/60 bg-white/80 p-5 shadow-sm backdrop-blur">
+          <div className="rounded-2xl border border-slate-200/40 bg-white/70 p-5 shadow-[0_14px_30px_-28px_rgba(15,106,232,0.35)] backdrop-blur transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-28px_rgba(15,106,232,0.4)]">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Upcoming deadlines</p>
-            <h3 className="text-2xl font-semibold mt-1">{primaryDeadlines.length}</h3>
+            <h3 className="mt-2 text-2xl font-semibold text-slate-900">{primaryDeadlines.length}</h3>
             <p className="text-sm text-slate-500">Near-term milestone dates</p>
           </div>
         </div>
 
-        <div className="rounded-3xl border border-slate-200/70 bg-white/80 p-5 shadow-sm backdrop-blur">
+        <div className="rounded-3xl border border-slate-200/40 bg-white/70 p-5 shadow-[0_18px_40px_-32px_rgba(15,106,232,0.35)] backdrop-blur">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Deadlines</p>
@@ -155,7 +156,7 @@ export default async function DashboardPage() {
             {primaryDeadlines.map((d) => (
               <div
                 key={d.id}
-                className="flex items-center justify-between rounded-2xl border border-slate-200/70 bg-white px-4 py-3 text-sm shadow-sm"
+                className="flex items-center justify-between rounded-2xl border border-slate-200/40 bg-white/80 px-4 py-3 text-sm shadow-sm transition hover:shadow-md"
               >
                 <div>
                   <p className="font-semibold">{d.milestone}</p>

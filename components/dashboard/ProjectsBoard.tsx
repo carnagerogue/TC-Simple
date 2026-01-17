@@ -190,8 +190,10 @@ export function ProjectsBoard({ primary, active, completed }: Props) {
           if (e.key === "Enter" || e.key === " ") router.push(`/projects/${p.id}/tasks`);
         }}
         className={`flex items-center justify-between rounded-2xl border ${
-          isDragging ? "border-[#9bc4ff]" : "border-slate-200/70"
-        } bg-white px-4 py-3 text-sm shadow-sm hover:border-[#9bc4ff] ${isDragging ? "opacity-70" : ""}`}
+          isDragging ? "border-[#9bc4ff]" : "border-slate-200/60"
+        } bg-white/80 px-4 py-3 text-sm shadow-sm transition hover:-translate-y-0.5 hover:border-[#9bc4ff] hover:shadow-md ${
+          isDragging ? "opacity-70" : ""
+        }`}
       >
         <div className="flex items-center gap-3">
           <input
@@ -238,15 +240,17 @@ export function ProjectsBoard({ primary, active, completed }: Props) {
         <div
           key={col}
           className={`rounded-3xl border ${
-            dragOver === col ? "border-[#9bc4ff] bg-[#f5f8ff]" : "border-slate-200/70 bg-white/80"
-          } p-5 shadow-sm backdrop-blur transition`}
+            dragOver === col
+              ? "border-[#9bc4ff]/60 bg-[#f5f8ff]/70 shadow-[0_20px_50px_-35px_rgba(15,106,232,0.4)]"
+              : "border-slate-200/40 bg-white/70 shadow-[0_16px_30px_-28px_rgba(15,106,232,0.25)]"
+          } p-5 backdrop-blur transition`}
           onDragOver={(e) => { e.preventDefault(); setDragOver(col); }}
           onDragLeave={() => setDragOver(null)}
           onDrop={(e) => { e.preventDefault(); handleDrop(col); }}
         >
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold">{columnLabels[col]}</h2>
+              <h2 className="text-lg font-semibold text-slate-900">{columnLabels[col]}</h2>
               <span className="text-xs text-slate-500">{columnData[col].length} total</span>
             </div>
             <div className="flex items-center gap-2">
@@ -273,7 +277,7 @@ export function ProjectsBoard({ primary, active, completed }: Props) {
           <div className="mt-3 space-y-2 min-h-[100px]">
             {columnData[col].map((p) => card(p))}
             {columnData[col].length === 0 && (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-400">
+              <div className="rounded-2xl border border-dashed border-slate-200/70 bg-white/70 px-4 py-8 text-center text-sm text-slate-400">
                 No projects here.
               </div>
             )}

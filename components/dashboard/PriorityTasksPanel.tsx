@@ -96,11 +96,13 @@ export function PriorityTasksPanel({ tasks }: Props) {
   };
 
   return (
-    <div className="rounded-3xl border border-[#9bc4ff] bg-white/90 px-6 py-4 shadow-sm backdrop-blur">
+    <div className="relative overflow-hidden rounded-3xl border border-[#9bc4ff]/40 bg-gradient-to-br from-[#eef5ff] via-white to-white px-6 py-4 shadow-[0_24px_60px_-40px_rgba(15,106,232,0.45)] backdrop-blur">
+      <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(15,106,232,0.25),transparent_60%)]" />
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-[#1b4c96]">Priority Tasks</p>
           <h2 className="text-lg font-semibold text-slate-900">Starred across projects</h2>
+          <p className="text-xs text-slate-500">High-impact items to tackle first.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -122,7 +124,7 @@ export function PriorityTasksPanel({ tasks }: Props) {
           <span className="text-xs text-slate-500">{items.length} total</span>
         </div>
       </div>
-      <div className="mt-3 space-y-3">
+      <div className="mt-4 space-y-3">
         {items.map((t) => (
           <div
             key={t.id}
@@ -132,7 +134,7 @@ export function PriorityTasksPanel({ tasks }: Props) {
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") setDetail({ open: true, task: t });
             }}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm hover:border-[#9bc4ff]"
+            className="rounded-2xl border border-slate-200/50 bg-white/80 px-4 py-3 text-sm shadow-sm transition hover:-translate-y-0.5 hover:border-[#9bc4ff] hover:shadow-md"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
@@ -173,7 +175,7 @@ export function PriorityTasksPanel({ tasks }: Props) {
                     e.stopPropagation();
                     togglePriority(t, !(t.priority ?? true));
                   }}
-                  className="rounded-md border px-2 py-1 text-sm border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100"
+                  className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-sm text-amber-600 shadow-sm shadow-amber-200/40 hover:bg-amber-100"
                   title="Toggle priority"
                 >
                   {t.priority === false ? "☆ Priority" : "★ Priority"}
