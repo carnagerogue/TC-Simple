@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import db from "@/lib/db";
 import { Prisma, ContactCategory } from "@prisma/client";
+import { ensureDbReady } from "@/lib/db";
 
 const VALID_CATEGORIES = ["AGENT", "CLIENT", "ESCROW", "VENDOR", "LENDER", "TITLE", "OTHER"] as const;
 type Category = (typeof VALID_CATEGORIES)[number];
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = session.user.id as string;
+  await ensureDbReady();
   const searchParams = new URL(req.url).searchParams;
   const sort = searchParams.get("sort") || "recent";
 

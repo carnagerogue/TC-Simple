@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { Prisma, ContactCategory } from "@prisma/client";
 
 const VALID_CATEGORIES = ["AGENT", "CLIENT", "ESCROW", "VENDOR", "LENDER", "TITLE", "OTHER"] as const;
@@ -65,6 +65,7 @@ export async function GET(req: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  await ensureDbReady();
   const searchParams = new URL(req.url).searchParams;
   const sort = searchParams.get("sort") || "recent";
 
@@ -86,6 +87,7 @@ export async function POST(req: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  await ensureDbReady();
 
   const body = (await req.json()) as ContactPayload;
   const {

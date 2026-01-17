@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import db from "@/lib/db";
+import { ensureDbReady } from "@/lib/db";
 
 const VALID_CATEGORIES = ["AGENT", "CLIENT", "ESCROW", "VENDOR", "LENDER", "TITLE", "OTHER"] as const;
 type Category = (typeof VALID_CATEGORIES)[number];
@@ -26,6 +27,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = session.user.id as string;
+  await ensureDbReady();
   const contact = await db.contact.findFirst({ where: { id: params.id, userId } });
   if (!contact) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ contact });
@@ -37,6 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = session.user.id as string;
+  await ensureDbReady();
   const body = (await req.json()) as ContactPayload;
 
   if (body.category && !VALID_CATEGORIES.includes(body.category)) {
@@ -86,6 +89,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = session.user.id as string;
+  await ensureDbReady();
   try {
     const existing = await db.contact.findFirst({ where: { id: params.id, userId } });
     if (!existing) {

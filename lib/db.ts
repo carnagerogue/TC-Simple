@@ -53,11 +53,18 @@ function runDbPushSync() {
   });
 }
 
-async function hasTransactionTable(): Promise<boolean> {
+async function hasCoreTables(): Promise<boolean> {
   const rows = (await db.$queryRaw(
-    Prisma.sql`SELECT name FROM sqlite_master WHERE type='table' AND name='Transaction' LIMIT 1`
+    Prisma.sql`
+      SELECT name
+      FROM sqlite_master
+      WHERE type='table'
+        AND name IN ('Transaction','Contact','Document','Project','ProjectTask')
+    `
   )) as Array<{ name?: string }>;
-  return rows.length > 0;
+  const found = new Set(rows.map((r) => r.name).filter((n): n is string => typeof n === "string"));
+  const required = ["Transaction", "Contact", "Document", "Project", "ProjectTask"] as const;
+  return required.every((t) => found.has(t));
 }
 
 /**
@@ -71,7 +78,7 @@ export async function ensureDbReady(): Promise<void> {
   if (!globalForInit.prismaDbInitPromise) {
     globalForInit.prismaDbInitPromise = (async () => {
       try {
-        const ok = await hasTransactionTable();
+        const ok = await hasCoreTables();
         if (ok) return;
         console.log("[db] Missing schema in /tmp sqlite DB; running prisma db push...");
         runDbPushSync();

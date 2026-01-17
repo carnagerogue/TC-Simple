@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getValidGoogleAccessToken } from "@/lib/google/tokenManager";
 import db from "@/lib/db";
+import { ensureDbReady } from "@/lib/db";
 
 type NormalizedContact = {
   id: string;
@@ -61,6 +62,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = session.user.id as string;
+  await ensureDbReady();
 
   try {
     const accessToken = await getValidGoogleAccessToken(userId);
