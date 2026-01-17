@@ -6,6 +6,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db, ensureDbReady } from "@/lib/db";
 import { parseContractFromPdf } from "@/lib/parser/contractParser";
+import { extractProvisionsFromPdf, isProvisionsEnabled } from "@/lib/parser/provisionsExtractor";
+import type { ExtractedProvisions } from "@/lib/parser/provisionsTypes";
 
 type SessionUser = { id?: string; email?: string | null };
 
@@ -135,6 +137,24 @@ export async function POST(request: NextRequest) {
         "Parser is not configured. Set OPENAI_API_KEY or PARSER_URL (or INTAKE_SERVICE_URL).";
       const status = message.toLowerCase().includes("openai is not configured") ? 503 : 502;
       return NextResponse.json({ error: message, documentId: document.id }, { status });
+    }
+
+    if (isProvisionsEnabled()) {
+      let extractedProvisions: ExtractedProvisions | null = null;
+      try {
+        const existing =
+          parsedData && isRecord(parsedData.extractedProvisions)
+            ? (parsedData.extractedProvisions as ExtractedProvisions)
+            : null;
+        extractedProvisions = existing ?? (await extractProvisionsFromPdf(buffer));
+      } catch {
+        extractedProvisions = null;
+      }
+      if (parsedData && isRecord(parsedData)) {
+        parsedData = { ...parsedData, extractedProvisions };
+      } else {
+        parsedData = { extractedProvisions };
+      }
     }
 
     // Create Transaction in DB (best-effort)

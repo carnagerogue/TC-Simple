@@ -6,6 +6,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db, ensureDbReady } from "@/lib/db";
 import { parseContractFromPdf } from "@/lib/parser/contractParser";
+import { extractProvisionsFromPdf, isProvisionsEnabled } from "@/lib/parser/provisionsExtractor";
+import type { ExtractedProvisions } from "@/lib/parser/provisionsTypes";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -78,6 +80,18 @@ export async function POST(_req: NextRequest, { params }: Params) {
   if (!parsedData) {
     const message = parseFailure ?? "Unable to parse document.";
     return NextResponse.json({ error: message }, { status: 502 });
+  }
+
+  if (isProvisionsEnabled()) {
+    let extractedProvisions: ExtractedProvisions | null = null;
+    try {
+      const existing =
+        isRecord(parsedData.extractedProvisions) ? (parsedData.extractedProvisions as ExtractedProvisions) : null;
+      extractedProvisions = existing ?? (await extractProvisionsFromPdf(buffer));
+    } catch {
+      extractedProvisions = null;
+    }
+    parsedData = { ...parsedData, extractedProvisions };
   }
 
   return NextResponse.json({ parsedData });

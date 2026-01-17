@@ -8,6 +8,7 @@ import { labelForField } from "@/lib/projectTaskTemplates";
 import { ParsedTaskList } from "@/components/ParsedTaskList";
 import { parseTasks, ParsedTaskItem } from "@/utils/parseTasks";
 import { PdfSinglePagePreview } from "@/components/PdfSinglePagePreview";
+import type { ExtractedProvisions } from "@/lib/parser/provisionsTypes";
 
 type UploadStatus =
   | { type: "idle"; message: "" }
@@ -36,10 +37,14 @@ function normalizeValue(field: string, value: unknown): string | string[] {
   return String(value);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function buildParsedItems(parsed: Record<string, unknown> | null): ParsedItem[] {
   if (!parsed) return [];
   return Object.entries(parsed)
-    .filter(([key, val]) => val !== null && val !== undefined && key !== "tasks")
+    .filter(([key, val]) => val !== null && val !== undefined && key !== "tasks" && key !== "extractedProvisions")
     .map(([key, val]) => ({
       field: key,
       label: labelForField(key),
@@ -58,6 +63,7 @@ export function UploadForm() {
   const [parsedItems, setParsedItems] = useState<ParsedItem[]>([]);
   const [parsedTasks, setParsedTasks] = useState<ParsedTaskItem[]>([]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [provisionsPanel, setProvisionsPanel] = useState<{ data: ExtractedProvisions | null } | null>(null);
   const [ctaHighlight, setCtaHighlight] = useState(false);
   const [isRerunningAi, setIsRerunningAi] = useState(false);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
@@ -117,6 +123,7 @@ export function UploadForm() {
     setParsedItems([]);
     setParsedTasks([]);
     setAiNotice(null);
+    setProvisionsPanel(null);
 
     try {
       const formData = new FormData();
@@ -166,6 +173,12 @@ export function UploadForm() {
         payload.parsedData && typeof payload.parsedData === "object" && !Array.isArray(payload.parsedData)
           ? (payload.parsedData as Record<string, unknown>)
           : null;
+      if (parsedSource && Object.prototype.hasOwnProperty.call(parsedSource, "extractedProvisions")) {
+        const raw = parsedSource.extractedProvisions;
+        setProvisionsPanel({ data: isRecord(raw) ? (raw as ExtractedProvisions) : null });
+      } else {
+        setProvisionsPanel(null);
+      }
       if (typeof payload.documentId === "string" && payload.documentId) {
         setPreviewUrl(`/api/documents/${payload.documentId}`);
       }
@@ -205,6 +218,12 @@ export function UploadForm() {
         body.parsedData && typeof body.parsedData === "object" && !Array.isArray(body.parsedData)
           ? (body.parsedData as Record<string, unknown>)
           : null;
+      if (parsed && Object.prototype.hasOwnProperty.call(parsed, "extractedProvisions")) {
+        const raw = parsed.extractedProvisions;
+        setProvisionsPanel({ data: isRecord(raw) ? (raw as ExtractedProvisions) : null });
+      } else {
+        setProvisionsPanel(null);
+      }
       if (parsed?.tasks) {
         setParsedTasks(parseTasks(parsed.tasks));
         setAiNotice("AI suggestions updated. Review before creating the project.");
@@ -358,6 +377,134 @@ export function UploadForm() {
                   </p>
                 ) : null}
               </div>
+              {provisionsPanel ? (
+                <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" open>
+                  <summary className="cursor-pointer list-none text-left">
+                    <p className="text-sm font-semibold text-gray-900">Key Provisions (draft)</p>
+                    <p className="text-xs text-gray-500">
+                      Extracted from the contract; verify before relying.
+                    </p>
+                  </summary>
+                  <div className="mt-3 space-y-3 text-sm text-slate-700">
+                    {provisionsPanel.data ? (
+                      <>
+                        {provisionsPanel.data.promissoryNote ? (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              Promissory Note
+                            </p>
+                            <p className="mt-1"><span className="font-semibold">Exists:</span> {provisionsPanel.data.promissoryNote.exists ? "Yes" : "No"}</p>
+                            {provisionsPanel.data.promissoryNote.amount !== undefined ? (
+                              <p><span className="font-semibold">Amount:</span> ${provisionsPanel.data.promissoryNote.amount.toLocaleString()}</p>
+                            ) : null}
+                            {provisionsPanel.data.promissoryNote.dueDate ? (
+                              <p><span className="font-semibold">Due date:</span> {provisionsPanel.data.promissoryNote.dueDate}</p>
+                            ) : null}
+                            {provisionsPanel.data.promissoryNote.payer ? (
+                              <p><span className="font-semibold">Payer:</span> {provisionsPanel.data.promissoryNote.payer}</p>
+                            ) : null}
+                            {provisionsPanel.data.promissoryNote.payee ? (
+                              <p><span className="font-semibold">Payee:</span> {provisionsPanel.data.promissoryNote.payee}</p>
+                            ) : null}
+                            {provisionsPanel.data.promissoryNote.notes ? (
+                              <p className="text-xs text-slate-500 mt-1">{provisionsPanel.data.promissoryNote.notes}</p>
+                            ) : null}
+                            {provisionsPanel.data.promissoryNote.source?.quote ? (
+                              <p className="text-xs text-slate-500 mt-1">Source: “{provisionsPanel.data.promissoryNote.source.quote}”</p>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {provisionsPanel.data.feasibility ? (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              Feasibility
+                            </p>
+                            <p className="mt-1"><span className="font-semibold">Exists:</span> {provisionsPanel.data.feasibility.exists ? "Yes" : "No"}</p>
+                            {provisionsPanel.data.feasibility.periodDays ? (
+                              <p><span className="font-semibold">Period:</span> {provisionsPanel.data.feasibility.periodDays} days</p>
+                            ) : null}
+                            {provisionsPanel.data.feasibility.expirationDate ? (
+                              <p><span className="font-semibold">Expiration:</span> {provisionsPanel.data.feasibility.expirationDate}</p>
+                            ) : null}
+                            {provisionsPanel.data.feasibility.requiresNotice !== undefined ? (
+                              <p><span className="font-semibold">Requires notice:</span> {provisionsPanel.data.feasibility.requiresNotice ? "Yes" : "No"}</p>
+                            ) : null}
+                            {provisionsPanel.data.feasibility.notes ? (
+                              <p className="text-xs text-slate-500 mt-1">{provisionsPanel.data.feasibility.notes}</p>
+                            ) : null}
+                            {provisionsPanel.data.feasibility.source?.quote ? (
+                              <p className="text-xs text-slate-500 mt-1">Source: “{provisionsPanel.data.feasibility.source.quote}”</p>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {provisionsPanel.data.financing ? (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              Financing
+                            </p>
+                            {provisionsPanel.data.financing.type ? (
+                              <p><span className="font-semibold">Type:</span> {provisionsPanel.data.financing.type}</p>
+                            ) : null}
+                            {provisionsPanel.data.financing.deadline ? (
+                              <p><span className="font-semibold">Deadline:</span> {provisionsPanel.data.financing.deadline}</p>
+                            ) : null}
+                            {provisionsPanel.data.financing.notes ? (
+                              <p className="text-xs text-slate-500 mt-1">{provisionsPanel.data.financing.notes}</p>
+                            ) : null}
+                            {provisionsPanel.data.financing.source?.quote ? (
+                              <p className="text-xs text-slate-500 mt-1">Source: “{provisionsPanel.data.financing.source.quote}”</p>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {provisionsPanel.data.contingencies?.length ? (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              Contingencies
+                            </p>
+                            <div className="mt-2 space-y-2">
+                              {provisionsPanel.data.contingencies.map((c, idx) => (
+                                <div key={`${c.type}-${idx}`} className="rounded-md border border-slate-200 bg-white px-3 py-2">
+                                  <p className="font-semibold">{c.type}</p>
+                                  {c.deadline ? <p className="text-xs text-slate-600">Deadline: {c.deadline}</p> : null}
+                                  {c.notes ? <p className="text-xs text-slate-500">{c.notes}</p> : null}
+                                  {c.source?.quote ? (
+                                    <p className="text-xs text-slate-500 mt-1">Source: “{c.source.quote}”</p>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {provisionsPanel.data.other?.length ? (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              Other
+                            </p>
+                            <div className="mt-2 space-y-2">
+                              {provisionsPanel.data.other.map((o, idx) => (
+                                <div key={`${o.label}-${idx}`} className="rounded-md border border-slate-200 bg-white px-3 py-2">
+                                  <p className="font-semibold">{o.label}</p>
+                                  <p className="text-xs text-slate-600">{o.value}</p>
+                                  {o.notes ? <p className="text-xs text-slate-500">{o.notes}</p> : null}
+                                  {o.source?.quote ? (
+                                    <p className="text-xs text-slate-500 mt-1">Source: “{o.source.quote}”</p>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-500">Unable to extract provisions for this document.</p>
+                    )}
+                  </div>
+                </details>
+              ) : null}
             </div>
 
             <div className="space-y-3">
