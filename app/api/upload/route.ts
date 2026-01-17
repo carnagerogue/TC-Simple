@@ -1,7 +1,10 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 
 type SessionUser = { id?: string; email?: string | null };
 
@@ -39,6 +42,9 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Ensure tables exist for the ephemeral /tmp SQLite DB on Vercel.
+  await ensureDbReady();
 
   const formData = await request.formData();
   const file = formData.get("file");
@@ -156,6 +162,14 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error("Failed to process upload:", error);
-    return NextResponse.json({ error: "Unable to save the file. Please try again." }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? `Unable to save the file. ${error.message}`
+            : "Unable to save the file. Please try again.",
+      },
+      { status: 500 }
+    );
   }
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 
 type TxnLite = { id: string; address: string | null; createdAt: Date };
 type ProjectLite = { id: string; name: string; summary: unknown; updatedAt: Date };
@@ -23,6 +23,8 @@ export async function GET() {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  await ensureDbReady();
 
   const userIds = Array.from(
     new Set([session.user.id, session.user.email].filter((v): v is string => typeof v === "string" && v.length > 0))
