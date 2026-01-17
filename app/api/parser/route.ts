@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 
-const DEFAULT_PARSER_URL = "http://localhost:8080/intake";
+const DEFAULT_PARSER_URL = "http://localhost:8000/intake";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File is required" }, { status: 400 });
     }
 
-    const parserUrl = process.env.PARSER_URL || DEFAULT_PARSER_URL;
+    const parserUrl = process.env.PARSER_URL || process.env.INTAKE_SERVICE_URL || DEFAULT_PARSER_URL;
     const outbound = new FormData();
     outbound.append("file", file);
 
@@ -27,8 +27,13 @@ export async function POST(request: NextRequest) {
       const error = err as { message?: string };
       console.error("Parser request failed to connect:", error.message || err);
       return NextResponse.json(
-        { error: `Parser request failed to connect. Ensure PARSER_URL (${parserUrl}) is reachable.` },
-        { status: 502 },
+        {
+          error:
+            `Parser request failed to connect. ` +
+            `Set PARSER_URL (or INTAKE_SERVICE_URL) to a publicly reachable endpoint. ` +
+            `Current: ${parserUrl}`,
+        },
+        { status: 502 }
       );
     }
 

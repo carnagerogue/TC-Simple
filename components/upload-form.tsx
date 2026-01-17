@@ -135,19 +135,26 @@ export function UploadForm() {
     setParsedItems([]);
 
     try {
-      // Call FastAPI parser first
-      const parsed = (await uploadToParser(file)) as ParserResponse;
-      // handle raw OpenAI-like response with choices or wrapped fields
-      let extracted: Record<string, unknown> | null = parsed.fields ?? parsed.extracted ?? null;
-      if (!extracted && parsed?.choices) {
-        const raw = parsed.choices?.[0]?.message?.content ?? "";
-        try {
-          extracted = JSON.parse(raw.replace(/```json|```/g, ""));
-        } catch (e) {
-          extracted = null;
+      // Try parser first (optional). If it fails, continue with upload-only mode.
+      let extracted: Record<string, unknown> | null = null;
+      let parserWarning = "";
+      try {
+        const parsed = (await uploadToParser(file)) as ParserResponse;
+        extracted = parsed.fields ?? parsed.extracted ?? null;
+        if (!extracted && parsed?.choices) {
+          const raw = parsed.choices?.[0]?.message?.content ?? "";
+          try {
+            extracted = JSON.parse(raw.replace(/```json|```/g, ""));
+          } catch (_) {
+            extracted = null;
+          }
         }
+        setParsedItems(buildParsedItems(extracted));
+      } catch (e: unknown) {
+        parserWarning = e instanceof Error ? e.message : "Parser unavailable";
+        // Don't block the flow—upload still creates a transaction with best-effort parsing server-side.
+        console.warn("Parser failed; continuing without parser:", e);
       }
-      setParsedItems(buildParsedItems(extracted));
 
       const formData = new FormData();
       formData.append("file", file);
@@ -171,7 +178,9 @@ export function UploadForm() {
         type: "success",
         message:
           payload.message ??
-          `Uploaded ${payload.fileName ?? file.name} successfully.${driveMsg}`,
+          `Uploaded ${payload.fileName ?? file.name} successfully.${driveMsg}${
+            parserWarning ? ` (Parser unavailable: ${parserWarning})` : ""
+          }`,
       });
       setFile(null);
       setTransactionId(payload.transactionId ?? null);
