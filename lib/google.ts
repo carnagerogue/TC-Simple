@@ -16,7 +16,11 @@ export async function getGoogleClient(request: NextRequest) {
     return { error: token.error } as const;
   }
 
-  const oauth2Client = new google.auth.OAuth2();
+  // Provide clientId/secret so OAuth2Client can refresh access tokens using refresh_token at runtime.
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  );
   oauth2Client.setCredentials({
     access_token: token.access_token as string,
     refresh_token: token.refresh_token as string | undefined,

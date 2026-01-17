@@ -4,64 +4,14 @@ import { authOptions } from "@/lib/auth";
 import { getValidGoogleAccessToken } from "@/lib/google/tokenManager";
 import db from "@/lib/db";
 import { ensureDbReady } from "@/lib/db";
-
-type NormalizedContact = {
-  id: string;
-  firstName: string;
-  lastName?: string;
-  email?: string;
-  phone?: string;
-  photoUrl?: string;
-  source: "gmail";
-};
-
-type PeopleConnection = {
-  resourceName?: string;
-  names?: Array<{ displayName?: string }>;
-  emailAddresses?: Array<{ value?: string }>;
-  phoneNumbers?: Array<{ value?: string }>;
-  photos?: Array<{ url?: string }>;
-};
-
-type PeopleConnectionsResponse = {
-  connections?: PeopleConnection[];
-};
-
-function splitName(displayName?: string): { firstName: string; lastName?: string } {
-  if (!displayName) return { firstName: "Unknown" };
-  const parts = displayName.trim().split(/\s+/);
-  if (parts.length === 1) return { firstName: parts[0] };
-  return { firstName: parts.shift() || "Unknown", lastName: parts.join(" ") || undefined };
-}
-
-function normalizePeopleConnections(data: PeopleConnectionsResponse): NormalizedContact[] {
-  const connections = data.connections ?? [];
-  return connections
-    .map((person) => {
-      const names = person.names?.[0];
-      const emails = person.emailAddresses?.[0];
-      const phones = person.phoneNumbers?.[0];
-      const photos = person.photos?.[0];
-      const { firstName, lastName } = splitName(names?.displayName);
-      return {
-        id: person.resourceName || Math.random().toString(),
-        firstName,
-        lastName,
-        email: emails?.value,
-        phone: phones?.value,
-        photoUrl: photos?.url,
-        source: "gmail" as const,
-      };
-    })
-    .filter((c: NormalizedContact) => c.firstName);
-}
+import { buildContactPayload, fetchAllGoogleConnections, normalizePeopleConnections } from "@/lib/google/contacts";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const userId = session?.user?.id || session?.user?.email || null;
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const userId = session.user.id as string;
   await ensureDbReady();
 
   try {
@@ -73,60 +23,155 @@ export async function GET() {
       );
     }
 
-    const res = await fetch(
-      "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses,phoneNumbers,photos&sortOrder=FIRST_NAME_ASCENDING",
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        cache: "no-store",
-      }
+    const connections = await fetchAllGoogleConnections(accessToken);
+    const contacts = normalizePeopleConnections({ connections });
+
+    const emailContacts = contacts.filter((c) => typeof c.email === "string" && c.email.length > 0);
+    const phoneOnlyContacts = contacts.filter(
+      (c) => (!c.email || c.email.length === 0) && typeof c.phone === "string" && c.phone.length > 0
     );
 
-    if (res.status === 401 || res.status === 403) {
-      return NextResponse.json(
-        { error: "Google permissions expired. Please reconnect your Google account." },
-        { status: 401 }
-      );
-    }
-
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`People API error: ${txt}`);
-    }
-
-    const json = (await res.json()) as PeopleConnectionsResponse;
-    const contacts = normalizePeopleConnections(json);
-
-    // Upsert into local DB; dedupe by userId + email
-    for (const c of contacts) {
-      if (!c.email) continue;
-      await db.contact.upsert({
-        where: {
-          userId_email: {
-            userId,
-            email: c.email,
+    const emails = Array.from(new Set(emailContacts.map((c) => c.email!)));
+    const existingByEmail = new Map(
+      (
+        await db.contact.findMany({
+          where: { userId, email: { in: emails } },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            avatarUrl: true,
+            category: true,
+            company: true,
+            role: true,
           },
-        },
-        create: {
-          userId,
-          firstName: c.firstName,
-          lastName: c.lastName ?? null,
-          email: c.email,
-          phone: c.phone ?? null,
-          avatarUrl: c.photoUrl ?? null,
-          source: "gmail",
-          category: "OTHER",
-        },
-        update: {
-          firstName: c.firstName,
-          lastName: c.lastName ?? null,
-          phone: c.phone ?? null,
-          avatarUrl: c.photoUrl ?? null,
-          source: "gmail",
-        },
-      });
+        })
+      ).map((c) => [c.email!, c])
+    );
+
+    const phones = Array.from(new Set(phoneOnlyContacts.map((c) => c.phone!)));
+    const existingByPhone = new Map(
+      (
+        await db.contact.findMany({
+          where: { userId, email: null, phone: { in: phones } },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            avatarUrl: true,
+            category: true,
+            company: true,
+            role: true,
+          },
+        })
+      ).map((c) => [c.phone!, c])
+    );
+
+    let created = 0;
+    let updated = 0;
+    const ops: Array<() => Promise<void>> = [];
+
+    for (const incoming of emailContacts) {
+      const existing = existingByEmail.get(incoming.email!);
+      const payload = buildContactPayload(existing ?? null, incoming);
+      if (existing) {
+        updated++;
+        ops.push(async () => {
+          await db.contact.update({
+            where: { id: existing.id },
+            data: {
+              firstName: payload.update.firstName,
+              lastName: payload.update.lastName ?? null,
+              email: incoming.email!,
+              phone: payload.update.phone ?? null,
+              avatarUrl: payload.update.avatarUrl ?? null,
+              category: payload.update.category,
+              source: payload.update.source,
+              company: payload.update.company ?? null,
+              role: payload.update.role ?? null,
+            },
+          });
+        });
+      } else {
+        created++;
+        ops.push(async () => {
+          await db.contact.create({
+            data: {
+              userId,
+              firstName: payload.create.firstName,
+              lastName: payload.create.lastName ?? null,
+              email: incoming.email!,
+              phone: payload.create.phone ?? null,
+              avatarUrl: payload.create.avatarUrl ?? null,
+              category: payload.create.category,
+              source: payload.create.source,
+              company: payload.create.company ?? null,
+              role: payload.create.role ?? null,
+            },
+          });
+        });
+      }
     }
 
-    return NextResponse.json({ synced: contacts.length });
+    for (const incoming of phoneOnlyContacts) {
+      const existing = existingByPhone.get(incoming.phone!);
+      const payload = buildContactPayload(existing ?? null, incoming);
+      if (existing) {
+        updated++;
+        ops.push(async () => {
+          await db.contact.update({
+            where: { id: existing.id },
+            data: {
+              firstName: payload.update.firstName,
+              lastName: payload.update.lastName ?? null,
+              phone: incoming.phone!,
+              email: null,
+              avatarUrl: payload.update.avatarUrl ?? null,
+              category: payload.update.category,
+              source: payload.update.source,
+              company: payload.update.company ?? null,
+              role: payload.update.role ?? null,
+            },
+          });
+        });
+      } else {
+        created++;
+        ops.push(async () => {
+          await db.contact.create({
+            data: {
+              userId,
+              firstName: payload.create.firstName,
+              lastName: payload.create.lastName ?? null,
+              email: null,
+              phone: incoming.phone!,
+              avatarUrl: payload.create.avatarUrl ?? null,
+              category: payload.create.category,
+              source: payload.create.source,
+              company: payload.create.company ?? null,
+              role: payload.create.role ?? null,
+            },
+          });
+        });
+      }
+    }
+
+    // Execute with bounded concurrency
+    const CONCURRENCY = 20;
+    for (let i = 0; i < ops.length; i += CONCURRENCY) {
+      await Promise.all(ops.slice(i, i + CONCURRENCY).map((fn) => fn()));
+    }
+
+    return NextResponse.json({
+      fetched: contacts.length,
+      created,
+      updated,
+      synced: created + updated,
+      skipped: contacts.length - (created + updated),
+    });
   } catch (e: unknown) {
     console.error("sync-gmail error", e);
     const error = e as { message?: string };

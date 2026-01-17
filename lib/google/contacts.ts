@@ -24,6 +24,7 @@ type PeopleConnection = {
 
 type PeopleConnectionsResponse = {
   connections?: PeopleConnection[];
+  nextPageToken?: string;
 };
 
 function splitName(displayName?: string): { firstName: string; lastName?: string } {
@@ -89,6 +90,8 @@ export type MergeResult = {
     avatarUrl?: string | null;
     category: ContactCategory;
     source: string;
+    company?: string | null;
+    role?: string | null;
   };
 };
 
@@ -110,6 +113,8 @@ export function buildContactPayload(
   const phone = incoming.phone ?? existing?.phone ?? null;
   const avatarUrl = incoming.photoUrl ?? existing?.avatarUrl ?? null;
   const category = incoming.category || existing?.category || "OTHER";
+  const company = incoming.organization ?? existing?.company ?? null;
+  const role = incoming.title ?? existing?.role ?? null;
 
   return {
     create: {
@@ -120,8 +125,8 @@ export function buildContactPayload(
       avatarUrl,
       category,
       source: "gmail",
-      company: existing?.company ?? null,
-      role: existing?.role ?? null,
+      company,
+      role,
     },
     update: {
       firstName,
@@ -130,7 +135,58 @@ export function buildContactPayload(
       avatarUrl,
       category,
       source: "gmail",
+      company,
+      role,
     },
   };
 }
 
+type FetchAllDeps = {
+  fetchImpl?: typeof fetch;
+  pageSize?: number;
+};
+
+/**
+ * Fetches ALL Google contacts via People API pagination.
+ * Docs: https://developers.google.com/people/api/rest/v1/people.connections/list
+ */
+export async function fetchAllGoogleConnections(
+  accessToken: string,
+  { fetchImpl = fetch, pageSize = 1000 }: FetchAllDeps = {}
+): Promise<PeopleConnection[]> {
+  const baseUrl = "https://people.googleapis.com/v1/people/me/connections";
+  const personFields = "names,emailAddresses,phoneNumbers,photos,organizations";
+
+  const out: PeopleConnection[] = [];
+  let pageToken: string | undefined = undefined;
+
+  // Safety cap to avoid accidental infinite loops
+  for (let i = 0; i < 200; i++) {
+    const url = new URL(baseUrl);
+    url.searchParams.set("personFields", personFields);
+    url.searchParams.set("sortOrder", "FIRST_NAME_ASCENDING");
+    url.searchParams.set("pageSize", String(Math.min(Math.max(pageSize, 1), 1000)));
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const res = await fetchImpl(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`Google permissions expired (${res.status}). ${txt}`.trim());
+    }
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`People API error (${res.status}): ${txt}`.trim());
+    }
+
+    const json = (await res.json()) as PeopleConnectionsResponse;
+    out.push(...(json.connections ?? []));
+    pageToken = json.nextPageToken;
+    if (!pageToken) break;
+  }
+
+  return out;
+}
