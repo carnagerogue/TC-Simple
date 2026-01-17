@@ -40,6 +40,8 @@ function renderTagPills(tags?: string) {
       case "confirm":
       case "review":
         return "bg-emerald-100 text-emerald-700";
+      case "document":
+        return "bg-blue-50 text-blue-700";
       case "email":
         return "bg-[#eaf2ff] text-[#1b4c96]";
       case "call":
@@ -123,7 +125,7 @@ export default function NewProjectPage() {
             requiresEmail: false,
             emailRecipientRole: null,
             selected: true,
-            tags: "ai",
+            tags: "document",
           }))
         );
       } else {
