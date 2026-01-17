@@ -18,6 +18,12 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 
 const normalizeText = (value: string) => value.replace(/\s+/g, " ").trim();
 
+type PageText = { pageNumber: number; text: string };
+
+type PdfTextItem = { str?: string };
+type PdfTextContent = { items: PdfTextItem[] };
+type PdfPageData = { pageNumber?: number; getTextContent: () => Promise<PdfTextContent> };
+
 const findFirstKeyword = (textLower: string, keywords: string[]) => {
   for (const keyword of keywords) {
     const idx = textLower.indexOf(keyword);
@@ -58,28 +64,64 @@ const extractDays = (snippet: string) => {
 const inferParty = (snippetLower: string, token: string, fallback: string) =>
   snippetLower.includes(token) ? fallback : undefined;
 
-const buildPromissoryNote = (text: string): PromissoryNoteProvision => {
-  const lower = text.toLowerCase();
-  const match = findFirstKeyword(lower, ["promissory note", "seller financing", "promissory", "deferred", "payable"]);
+const extractPageTexts = async (buffer: Buffer): Promise<PageText[]> => {
+  const pdfParse = (await import("pdf-parse")).default;
+  const pages: PageText[] = [];
+  await pdfParse(buffer, {
+    pagerender: async (pageData: PdfPageData) => {
+      const content = await pageData.getTextContent();
+      const strings = content.items.map((item) => (typeof item.str === "string" ? item.str : "")).join(" ");
+      const text = normalizeText(strings);
+      if (text.length > 0) {
+        pages.push({ pageNumber: pageData.pageNumber ?? pages.length + 1, text });
+      }
+      return text;
+    },
+  });
+  return pages.sort((a, b) => a.pageNumber - b.pageNumber);
+};
+
+type MatchInfo = { pageNumber: number; keyword: string; quote: string };
+
+const findMatchInPages = (pages: PageText[], keywords: string[]): MatchInfo | null => {
+  for (const page of pages) {
+    const lower = page.text.toLowerCase();
+    const match = findFirstKeyword(lower, keywords);
+    if (!match) continue;
+    return {
+      pageNumber: page.pageNumber,
+      keyword: match.keyword,
+      quote: snippetForIndex(page.text, match.idx),
+    };
+  }
+  return null;
+};
+
+const buildPromissoryNote = (pages: PageText[]): PromissoryNoteProvision => {
+  const match = findMatchInPages(pages, [
+    "promissory note",
+    "seller financing",
+    "promissory",
+    "deferred",
+    "payable",
+  ]);
   if (!match) {
     return { exists: false };
   }
-  const quote = snippetForIndex(text, match.idx);
-  const quoteLower = quote.toLowerCase();
+  const quoteLower = match.quote.toLowerCase();
   return {
     exists: true,
-    amount: extractAmount(quote),
-    dueDate: extractDate(quote),
+    amount: extractAmount(match.quote),
+    dueDate: extractDate(match.quote),
     payer: inferParty(quoteLower, "buyer", "Buyer"),
     payee: inferParty(quoteLower, "seller", "Seller"),
     notes: `Detected "${match.keyword}" language.`,
-    source: { quote },
+    source: { page: match.pageNumber, quote: match.quote },
   };
 };
 
-const buildFeasibility = (text: string): FeasibilityProvision => {
-  const lower = text.toLowerCase();
-  const match = findFirstKeyword(lower, [
+const buildFeasibility = (pages: PageText[]): FeasibilityProvision => {
+  const match = findMatchInPages(pages, [
     "feasibility contingency",
     "feasibility period",
     "feasibility",
@@ -89,24 +131,21 @@ const buildFeasibility = (text: string): FeasibilityProvision => {
   if (!match) {
     return { exists: false };
   }
-  const quote = snippetForIndex(text, match.idx);
-  const quoteLower = quote.toLowerCase();
+  const quoteLower = match.quote.toLowerCase();
   return {
     exists: true,
-    periodDays: extractDays(quote),
-    expirationDate: extractDate(quote),
+    periodDays: extractDays(match.quote),
+    expirationDate: extractDate(match.quote),
     requiresNotice: quoteLower.includes("notice"),
     notes: `Detected "${match.keyword}" language.`,
-    source: { quote },
+    source: { page: match.pageNumber, quote: match.quote },
   };
 };
 
-const buildFinancing = (text: string): FinancingProvision | undefined => {
-  const lower = text.toLowerCase();
-  const match = findFirstKeyword(lower, ["financing", "loan approval", "commitment", "mortgage"]);
+const buildFinancing = (pages: PageText[]): FinancingProvision | undefined => {
+  const match = findMatchInPages(pages, ["financing", "loan approval", "commitment", "mortgage"]);
   if (!match) return undefined;
-  const quote = snippetForIndex(text, match.idx);
-  const quoteLower = quote.toLowerCase();
+  const quoteLower = match.quote.toLowerCase();
   const type = quoteLower.includes("commitment")
     ? "Loan commitment"
     : quoteLower.includes("approval")
@@ -116,14 +155,13 @@ const buildFinancing = (text: string): FinancingProvision | undefined => {
     : "Financing";
   return {
     type,
-    deadline: extractDate(quote) ?? (extractDays(quote) ? `${extractDays(quote)} days` : undefined),
+    deadline: extractDate(match.quote) ?? (extractDays(match.quote) ? `${extractDays(match.quote)} days` : undefined),
     notes: `Detected "${match.keyword}" language.`,
-    source: { quote },
+    source: { page: match.pageNumber, quote: match.quote },
   };
 };
 
-const buildContingencies = (text: string): ContingencyProvision[] => {
-  const lower = text.toLowerCase();
+const buildContingencies = (pages: PageText[]): ContingencyProvision[] => {
   const definitions = [
     { type: "Inspection", keywords: ["inspection contingency", "inspection period", "inspection"] },
     { type: "Appraisal", keywords: ["appraisal", "appraisal contingency"] },
@@ -135,38 +173,36 @@ const buildContingencies = (text: string): ContingencyProvision[] => {
 
   const results: ContingencyProvision[] = [];
   definitions.forEach((def) => {
-    const match = findFirstKeyword(lower, def.keywords);
+    const match = findMatchInPages(pages, def.keywords);
     if (!match) return;
-    const quote = snippetForIndex(text, match.idx);
     results.push({
       type: def.type,
-      deadline: extractDate(quote) ?? (extractDays(quote) ? `${extractDays(quote)} days` : undefined),
+      deadline:
+        extractDate(match.quote) ?? (extractDays(match.quote) ? `${extractDays(match.quote)} days` : undefined),
       notes: `Detected "${match.keyword}" language.`,
-      source: { quote },
+      source: { page: match.pageNumber, quote: match.quote },
     });
   });
   return results;
 };
 
-const buildOther = (text: string) => {
-  const lower = text.toLowerCase();
+const buildOther = (pages: PageText[]) => {
   const definitions = [
     { label: "Closing Date", keywords: ["closing date", "close of escrow"] },
     { label: "Earnest Money Deadline", keywords: ["earnest money", "deposit due"] },
     { label: "Possession Date", keywords: ["possession date", "possession"] },
   ];
 
-  const results: Array<{ label: string; value: string; notes?: string; source: { quote: string } }> = [];
+  const results: Array<{ label: string; value: string; notes?: string; source: { quote: string; page?: number } }> = [];
   definitions.forEach((def) => {
-    const match = findFirstKeyword(lower, def.keywords);
+    const match = findMatchInPages(pages, def.keywords);
     if (!match) return;
-    const quote = snippetForIndex(text, match.idx);
-    const value = extractDate(quote) ?? quote;
+    const value = extractDate(match.quote) ?? match.quote;
     results.push({
       label: def.label,
       value,
       notes: `Detected "${match.keyword}" language.`,
-      source: { quote },
+      source: { page: match.pageNumber, quote: match.quote },
     });
   });
   return results;
@@ -179,15 +215,13 @@ export function isProvisionsEnabled() {
 
 export async function extractProvisionsFromPdf(buffer: Buffer): Promise<ExtractedProvisions | null> {
   try {
-    const pdfParse = (await import("pdf-parse")).default;
-    const result = await pdfParse(buffer);
-    const text = normalizeText(result.text || "");
-    if (!text || text.length < 50) return null;
-    const promissoryNote = buildPromissoryNote(text);
-    const feasibility = buildFeasibility(text);
-    const financing = buildFinancing(text);
-    const contingencies = buildContingencies(text);
-    const other = buildOther(text);
+    const pages = await extractPageTexts(buffer);
+    if (!pages.length) return null;
+    const promissoryNote = buildPromissoryNote(pages);
+    const feasibility = buildFeasibility(pages);
+    const financing = buildFinancing(pages);
+    const contingencies = buildContingencies(pages);
+    const other = buildOther(pages);
 
     return {
       promissoryNote,

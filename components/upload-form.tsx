@@ -377,10 +377,13 @@ export function UploadForm() {
                   </p>
                 ) : null}
               </div>
+            </div>
+
+            <div className="space-y-3">
               {provisionsPanel ? (
                 <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" open>
                   <summary className="cursor-pointer list-none text-left">
-                    <p className="text-sm font-semibold text-gray-900">Key Provisions (draft)</p>
+                    <p className="text-sm font-semibold text-gray-900">Key Contract Provisions (Draft)</p>
                     <p className="text-xs text-gray-500">
                       Extracted from the contract; verify before relying.
                     </p>
@@ -388,6 +391,29 @@ export function UploadForm() {
                   <div className="mt-3 space-y-3 text-sm text-slate-700">
                     {provisionsPanel.data ? (
                       <>
+                        {provisionsPanel.data.feasibility ? (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              Feasibility
+                            </p>
+                            <p className="mt-1"><span className="font-semibold">Exists:</span> {provisionsPanel.data.feasibility.exists ? "Yes" : "No"}</p>
+                            {provisionsPanel.data.feasibility.periodDays ? (
+                              <p><span className="font-semibold">Period:</span> {provisionsPanel.data.feasibility.periodDays} days</p>
+                            ) : null}
+                            {provisionsPanel.data.feasibility.expirationDate ? (
+                              <p><span className="font-semibold">Expiration:</span> {provisionsPanel.data.feasibility.expirationDate}</p>
+                            ) : null}
+                            {provisionsPanel.data.feasibility.requiresNotice !== undefined ? (
+                              <p><span className="font-semibold">Requires notice:</span> {provisionsPanel.data.feasibility.requiresNotice ? "Yes" : "No"}</p>
+                            ) : null}
+                            {provisionsPanel.data.feasibility.source?.quote ? (
+                              <p className="text-xs text-slate-500 mt-1">
+                                Source{provisionsPanel.data.feasibility.source.page ? ` (page ${provisionsPanel.data.feasibility.source.page})` : ""}: “{provisionsPanel.data.feasibility.source.quote}”
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+
                         {provisionsPanel.data.promissoryNote ? (
                           <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
                             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -406,35 +432,10 @@ export function UploadForm() {
                             {provisionsPanel.data.promissoryNote.payee ? (
                               <p><span className="font-semibold">Payee:</span> {provisionsPanel.data.promissoryNote.payee}</p>
                             ) : null}
-                            {provisionsPanel.data.promissoryNote.notes ? (
-                              <p className="text-xs text-slate-500 mt-1">{provisionsPanel.data.promissoryNote.notes}</p>
-                            ) : null}
                             {provisionsPanel.data.promissoryNote.source?.quote ? (
-                              <p className="text-xs text-slate-500 mt-1">Source: “{provisionsPanel.data.promissoryNote.source.quote}”</p>
-                            ) : null}
-                          </div>
-                        ) : null}
-
-                        {provisionsPanel.data.feasibility ? (
-                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                              Feasibility
-                            </p>
-                            <p className="mt-1"><span className="font-semibold">Exists:</span> {provisionsPanel.data.feasibility.exists ? "Yes" : "No"}</p>
-                            {provisionsPanel.data.feasibility.periodDays ? (
-                              <p><span className="font-semibold">Period:</span> {provisionsPanel.data.feasibility.periodDays} days</p>
-                            ) : null}
-                            {provisionsPanel.data.feasibility.expirationDate ? (
-                              <p><span className="font-semibold">Expiration:</span> {provisionsPanel.data.feasibility.expirationDate}</p>
-                            ) : null}
-                            {provisionsPanel.data.feasibility.requiresNotice !== undefined ? (
-                              <p><span className="font-semibold">Requires notice:</span> {provisionsPanel.data.feasibility.requiresNotice ? "Yes" : "No"}</p>
-                            ) : null}
-                            {provisionsPanel.data.feasibility.notes ? (
-                              <p className="text-xs text-slate-500 mt-1">{provisionsPanel.data.feasibility.notes}</p>
-                            ) : null}
-                            {provisionsPanel.data.feasibility.source?.quote ? (
-                              <p className="text-xs text-slate-500 mt-1">Source: “{provisionsPanel.data.feasibility.source.quote}”</p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Source{provisionsPanel.data.promissoryNote.source.page ? ` (page ${provisionsPanel.data.promissoryNote.source.page})` : ""}: “{provisionsPanel.data.promissoryNote.source.quote}”
+                              </p>
                             ) : null}
                           </div>
                         ) : null}
@@ -450,11 +451,10 @@ export function UploadForm() {
                             {provisionsPanel.data.financing.deadline ? (
                               <p><span className="font-semibold">Deadline:</span> {provisionsPanel.data.financing.deadline}</p>
                             ) : null}
-                            {provisionsPanel.data.financing.notes ? (
-                              <p className="text-xs text-slate-500 mt-1">{provisionsPanel.data.financing.notes}</p>
-                            ) : null}
                             {provisionsPanel.data.financing.source?.quote ? (
-                              <p className="text-xs text-slate-500 mt-1">Source: “{provisionsPanel.data.financing.source.quote}”</p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Source{provisionsPanel.data.financing.source.page ? ` (page ${provisionsPanel.data.financing.source.page})` : ""}: “{provisionsPanel.data.financing.source.quote}”
+                              </p>
                             ) : null}
                           </div>
                         ) : null}
@@ -469,29 +469,10 @@ export function UploadForm() {
                                 <div key={`${c.type}-${idx}`} className="rounded-md border border-slate-200 bg-white px-3 py-2">
                                   <p className="font-semibold">{c.type}</p>
                                   {c.deadline ? <p className="text-xs text-slate-600">Deadline: {c.deadline}</p> : null}
-                                  {c.notes ? <p className="text-xs text-slate-500">{c.notes}</p> : null}
                                   {c.source?.quote ? (
-                                    <p className="text-xs text-slate-500 mt-1">Source: “{c.source.quote}”</p>
-                                  ) : null}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {provisionsPanel.data.other?.length ? (
-                          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                              Other
-                            </p>
-                            <div className="mt-2 space-y-2">
-                              {provisionsPanel.data.other.map((o, idx) => (
-                                <div key={`${o.label}-${idx}`} className="rounded-md border border-slate-200 bg-white px-3 py-2">
-                                  <p className="font-semibold">{o.label}</p>
-                                  <p className="text-xs text-slate-600">{o.value}</p>
-                                  {o.notes ? <p className="text-xs text-slate-500">{o.notes}</p> : null}
-                                  {o.source?.quote ? (
-                                    <p className="text-xs text-slate-500 mt-1">Source: “{o.source.quote}”</p>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                      Source{c.source.page ? ` (page ${c.source.page})` : ""}: “{c.source.quote}”
+                                    </p>
                                   ) : null}
                                 </div>
                               ))}
@@ -505,9 +486,6 @@ export function UploadForm() {
                   </div>
                 </details>
               ) : null}
-            </div>
-
-            <div className="space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
