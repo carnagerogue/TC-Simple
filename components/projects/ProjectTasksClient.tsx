@@ -6,9 +6,9 @@ import { ProjectStakeholderList, Stakeholder } from "./ProjectStakeholderList";
 import { EmailDraftModal } from "./EmailDraftModal";
 import { TagEditModal } from "./TagEditModal";
 import { TaskDetailModal } from "./TaskDetailModal";
-import { ProjectMiniCalendar } from "./ProjectMiniCalendar";
 import { ProjectGoogleCalendarPanel } from "./ProjectGoogleCalendarPanel";
 import { ProjectLinkedContactsPanel } from "./ProjectLinkedContactsPanel";
+import { AddToGoogleCalendarModal } from "./AddToGoogleCalendarModal";
 import { extractRoleFromTags, tagsIncludeEmail, renderTemplate, normalizeRoleToStakeholder } from "@/lib/emailHelpers";
 import { extractEmailRolesFromTags, emailRoleLabel, emailRoleToStakeholder } from "@/lib/emailTagging";
 import type { EmailRecipientRole } from "@/lib/emailTagging";
@@ -79,6 +79,19 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
     templateId?: string | null;
     taskId?: string | null;
   }>({ open: false });
+  const [calendarPrompt, setCalendarPrompt] = useState<{
+    taskId: string;
+    title: string;
+    dueDate: string;
+  } | null>(null);
+
+  const projectAddress = (() => {
+    const summary = project.summary || {};
+    if (typeof summary.property_address === "string") return summary.property_address;
+    if (typeof summary.address === "string") return summary.address;
+    if (typeof summary.propertyAddress === "string") return summary.propertyAddress;
+    return null;
+  })();
 
   const updateMyClientRole = async (role: "BUYER" | "SELLER") => {
     setUpdatingClient(true);
@@ -259,6 +272,16 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
     patchLocalTask(taskId, { dueDate: nextIso });
     try {
       await updateTask(taskId, { dueDate: nextDueDate });
+      if (nextDueDate) {
+        const task = tasks.find((t) => t.id === taskId);
+        if (task) {
+          setCalendarPrompt({
+            taskId,
+            title: task.title,
+            dueDate: nextDueDate,
+          });
+        }
+      }
     } catch (e) {
       patchLocalTask(taskId, { dueDate: previous });
       throw e;
@@ -296,44 +319,6 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
     }
   };
 
-  const addTask = async (title: string, dueDate: string) => {
-    const tempId = `temp-${Date.now()}`;
-    const optimistic: Task = {
-      id: tempId,
-      title,
-      dueDate: new Date(dueDate).toISOString(),
-      status: "upcoming",
-      tags: null,
-      notes: null,
-      priority: false,
-    };
-    setTasks((prev) => [optimistic, ...prev]);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, dueDate }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(body.error || "Unable to add task.");
-      }
-      const created: Task = {
-        id: body.id ?? tempId,
-        title: body.title ?? title,
-        dueDate: typeof body.dueDate === "string" ? body.dueDate : optimistic.dueDate,
-        status: body.status ?? "upcoming",
-        tags: body.tags ?? null,
-        notes: body.notes ?? null,
-        priority: body.priority ?? false,
-      };
-      setTasks((prev) => prev.map((t) => (t.id === tempId ? created : t)));
-    } catch (e) {
-      console.error(e);
-      setTasks((prev) => prev.filter((t) => t.id !== tempId));
-    }
-  };
-
   const deleteProject = async () => {
     if (!window.confirm("Are you sure?")) return;
     setIsDeletingProject(true);
@@ -344,15 +329,6 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
       setIsDeletingProject(false);
     }
   };
-
-  const openTaskFromCalendar = useCallback(
-    (taskId: string) => {
-      const task = tasks.find((t) => t.id === taskId) || null;
-      if (!task) return;
-      setDetailModal({ open: true, task });
-    },
-    [tasks]
-  );
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pt-24">
@@ -419,15 +395,6 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
           </div>
           <div className="mt-4">
             <ProjectGoogleCalendarPanel />
-          </div>
-          <div className="mt-4">
-            <ProjectMiniCalendar
-              tasks={tasks}
-              onOpenTask={(task) => openTaskFromCalendar(task.id)}
-              onSetDueDate={(taskId, nextDate) => updateDueDate(taskId, nextDate)}
-              onDeleteTask={(taskId) => deleteTask(taskId)}
-              onAddTask={(title, dueDate) => addTask(title, dueDate)}
-            />
           </div>
         </div>
       </div>
@@ -512,6 +479,17 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
             console.error(e);
           }
         }}
+      />
+
+      <AddToGoogleCalendarModal
+        open={!!calendarPrompt}
+        taskId={calendarPrompt?.taskId || ""}
+        taskTitle={calendarPrompt?.title || ""}
+        dueDate={calendarPrompt?.dueDate || ""}
+        projectId={projectId}
+        projectName={project.name}
+        projectAddress={projectAddress}
+        onClose={() => setCalendarPrompt(null)}
       />
     </div>
   );
