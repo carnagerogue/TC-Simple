@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
+import { parseContractFromPdf } from "@/lib/parser/contractParser";
 
 const DEFAULT_PARSER_URL = "http://localhost:8000/intake";
 
@@ -14,51 +15,44 @@ export async function POST(request: NextRequest) {
     }
 
     const configured = process.env.PARSER_URL || process.env.INTAKE_SERVICE_URL;
-    if (!configured && process.env.VERCEL) {
-      return NextResponse.json(
-        {
-          error:
-            "Parser is not configured for production. Set PARSER_URL (or INTAKE_SERVICE_URL) to the public URL of your intake-service, ending with /intake.",
-        },
-        { status: 503 }
-      );
+    const parserUrl = configured || (!process.env.VERCEL ? DEFAULT_PARSER_URL : null);
+
+    if (parserUrl) {
+      const outbound = new FormData();
+      outbound.append("file", file);
+
+      let res: Response | null = null;
+      try {
+        res = await fetch(parserUrl, {
+          method: "POST",
+          body: outbound,
+        });
+      } catch (err: unknown) {
+        const error = err as { message?: string };
+        console.error("Parser request failed to connect:", error.message || err);
+      }
+
+      if (res?.ok) {
+        const data = await res.json();
+        return NextResponse.json(data);
+      }
+
+      if (res && !res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error("Parser response error", res.status, text);
+      }
     }
 
-    const parserUrl = configured || DEFAULT_PARSER_URL;
-    const outbound = new FormData();
-    outbound.append("file", file);
-
-    let res: Response;
+    // Fallback: parse directly via OpenAI (no external intake-service needed)
+    const buffer = Buffer.from(await file.arrayBuffer());
     try {
-      res = await fetch(parserUrl, {
-        method: "POST",
-        body: outbound,
-      });
+      const data = await parseContractFromPdf(buffer);
+      return NextResponse.json(data);
     } catch (err: unknown) {
-      const error = err as { message?: string };
-      console.error("Parser request failed to connect:", error.message || err);
-      return NextResponse.json(
-        {
-          error:
-            `Parser request failed to connect. ` +
-            `Set PARSER_URL (or INTAKE_SERVICE_URL) to a publicly reachable endpoint. ` +
-            `Current: ${parserUrl}`,
-        },
-        { status: 502 }
-      );
+      const message = err instanceof Error ? err.message : "Parser request failed";
+      const status = message.toLowerCase().includes("openai is not configured") ? 503 : 500;
+      return NextResponse.json({ error: message }, { status });
     }
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error("Parser response error", res.status, text);
-      return NextResponse.json(
-        { error: `Parser request failed (${res.status}) ${text}` },
-        { status: 502 },
-      );
-    }
-
-    const data = await res.json();
-    return NextResponse.json(data);
   } catch (error) {
     console.error("Parser request failed", error);
     return NextResponse.json({ error: "Parser request failed" }, { status: 500 });

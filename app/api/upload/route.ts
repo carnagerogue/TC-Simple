@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db, ensureDbReady } from "@/lib/db";
+import { parseContractFromPdf } from "@/lib/parser/contractParser";
 
 type SessionUser = { id?: string; email?: string | null };
 
@@ -82,27 +83,15 @@ export async function POST(request: NextRequest) {
 
     let transactionId: string | null = null;
     let parsedData: Record<string, unknown> | null = null;
+    let parseFailure: string | null = null;
 
-    // Call Intake Service (best-effort)
-    try {
-      const intakeUrl =
-        process.env.PARSER_URL ||
-        process.env.INTAKE_SERVICE_URL ||
-        (!process.env.VERCEL ? "http://localhost:8000/intake" : null);
-      if (!intakeUrl) {
-        if (requireParse) {
-          return NextResponse.json(
-            {
-              error:
-                "Parser is not configured. Set PARSER_URL (or INTAKE_SERVICE_URL) to the public URL of your intake-service, ending with /intake.",
-              documentId: document.id,
-            },
-            { status: 503 }
-          );
-        }
-        // Not configured; skip parsing (upload still works)
-        parsedData = null;
-      } else {
+    const intakeUrl =
+      process.env.PARSER_URL ||
+      process.env.INTAKE_SERVICE_URL ||
+      (!process.env.VERCEL ? "http://localhost:8000/intake" : null);
+
+    if (intakeUrl) {
+      try {
         const intakeFormData = new FormData();
         intakeFormData.append("file", new Blob([buffer], { type: file.type }), file.name);
 
@@ -114,41 +103,38 @@ export async function POST(request: NextRequest) {
         if (intakeRes.ok) {
           const json = (await intakeRes.json().catch(() => null)) as unknown;
           parsedData = isRecord(json) ? json : null;
-          if (requireParse && !parsedData) {
-            return NextResponse.json(
-              { error: "Parser returned invalid JSON.", documentId: document.id },
-              { status: 502 }
-            );
-          }
-          if (requireParse && parsedData && typeof parsedData.error === "string") {
-            return NextResponse.json(
-              { error: parsedData.error, documentId: document.id, details: parsedData },
-              { status: 502 }
-            );
+          if (!parsedData) {
+            parseFailure = "Parser returned invalid JSON.";
+          } else if (typeof parsedData.error === "string") {
+            parseFailure = parsedData.error;
+            parsedData = null;
           }
         } else {
           const text = await intakeRes.text().catch(() => "");
-          console.warn("Intake service failed:", text);
-          if (requireParse) {
-            return NextResponse.json(
-              { error: `Intake service failed (${intakeRes.status}) ${text}`, documentId: document.id },
-              { status: 502 }
-            );
-          }
+          parseFailure = `Intake service failed (${intakeRes.status}) ${text}`.trim();
         }
+      } catch (e: unknown) {
+        parseFailure =
+          e instanceof Error
+            ? `Failed to connect to intake-service. ${e.message}`
+            : "Failed to connect to intake-service.";
       }
-    } catch (e: unknown) {
-      console.warn("Failed to connect to intake service:", e);
-      if (requireParse) {
-        return NextResponse.json(
-          {
-            error:
-              "Failed to connect to intake-service. Ensure PARSER_URL (or INTAKE_SERVICE_URL) is publicly reachable and includes /intake.",
-            documentId: document.id,
-          },
-          { status: 502 }
-        );
+    }
+
+    if (!parsedData) {
+      try {
+        parsedData = await parseContractFromPdf(buffer);
+      } catch (e: unknown) {
+        parseFailure = e instanceof Error ? e.message : "Parser failed.";
       }
+    }
+
+    if (requireParse && !parsedData) {
+      const message =
+        parseFailure ??
+        "Parser is not configured. Set OPENAI_API_KEY or PARSER_URL (or INTAKE_SERVICE_URL).";
+      const status = message.toLowerCase().includes("openai is not configured") ? 503 : 502;
+      return NextResponse.json({ error: message, documentId: document.id }, { status });
     }
 
     // Create Transaction in DB (best-effort)
