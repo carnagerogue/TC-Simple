@@ -1,5 +1,4 @@
 import { Prisma, PrismaClient } from "@prisma/client";
-import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
@@ -14,6 +13,37 @@ if (!process.env.DATABASE_URL) {
   console.warn(`[db] DATABASE_URL was missing; using fallback (${fallback}).`);
 }
 
+function sqliteFilePathFromUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  if (!url.startsWith("file:")) return null;
+  return url.replace(/^file:/, "");
+}
+
+function looksLikeTmpSqlite(url: string | undefined): boolean {
+  const p = sqliteFilePathFromUrl(url);
+  return typeof p === "string" && p.startsWith("/tmp/");
+}
+
+// Vercel runtime uses an ephemeral /tmp filesystem. Ship a small schema-only SQLite template
+// (prisma/vercel.db) and copy it into /tmp on cold start so required tables exist.
+if (isVercel && looksLikeTmpSqlite(process.env.DATABASE_URL)) {
+  const dbPath = sqliteFilePathFromUrl(process.env.DATABASE_URL) || "/tmp/tc-simple.db";
+  const templatePath = path.join(process.cwd(), "prisma", "vercel.db");
+  try {
+    const needsInit =
+      !fs.existsSync(dbPath) || (fs.statSync(dbPath).size < 4096); // empty db is ~0–4KB
+    if (needsInit) {
+      if (!fs.existsSync(templatePath)) {
+        throw new Error(`SQLite template DB missing at ${templatePath}`);
+      }
+      fs.copyFileSync(templatePath, dbPath);
+      console.log(`[db] Initialized sqlite DB from template: ${templatePath} -> ${dbPath}`);
+    }
+  } catch (e) {
+    console.error("[db] Failed to initialize sqlite DB from template", e);
+  }
+}
+
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 export const db =
@@ -25,33 +55,6 @@ export const db =
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
 
 export default db;
-
-type DbInitGlobal = { prismaDbInitPromise?: Promise<void> };
-const globalForInit = global as unknown as DbInitGlobal;
-
-function looksLikeTmpSqlite(url: string | undefined): boolean {
-  return !!url && url.startsWith("file:/tmp/");
-}
-
-function prismaCliPath(): string {
-  // Vercel runtime bundles node_modules; run the Prisma CLI without npx/network.
-  return path.join(process.cwd(), "node_modules", "prisma", "build", "index.js");
-}
-
-function runDbPushSync() {
-  const cli = prismaCliPath();
-  if (!fs.existsSync(cli)) {
-    throw new Error(`Prisma CLI not found at ${cli}`);
-  }
-  execSync(`${process.execPath} ${cli} db push --skip-generate`, {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      PRISMA_HIDE_UPDATE_MESSAGE: "1",
-      PRISMA_TELEMETRY_INFORMATION: "none",
-    },
-  });
-}
 
 async function hasCoreTables(): Promise<boolean> {
   const rows = (await db.$queryRaw(
@@ -74,20 +77,11 @@ async function hasCoreTables(): Promise<boolean> {
 export async function ensureDbReady(): Promise<void> {
   if (!isVercel) return;
   if (!looksLikeTmpSqlite(process.env.DATABASE_URL)) return;
-
-  if (!globalForInit.prismaDbInitPromise) {
-    globalForInit.prismaDbInitPromise = (async () => {
-      try {
-        const ok = await hasCoreTables();
-        if (ok) return;
-        console.log("[db] Missing schema in /tmp sqlite DB; running prisma db push...");
-        runDbPushSync();
-      } catch (e) {
-        console.error("[db] ensureDbReady failed", e);
-        throw e;
-      }
-    })();
+  const ok = await hasCoreTables();
+  if (!ok) {
+    throw new Error(
+      "Database schema is missing in the Vercel /tmp SQLite database. " +
+        "Redeploy the latest build (which includes prisma/vercel.db template), or configure a persistent DATABASE_URL."
+    );
   }
-
-  await globalForInit.prismaDbInitPromise;
 }
