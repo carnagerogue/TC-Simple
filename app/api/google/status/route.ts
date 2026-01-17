@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  if (!session?.user) {
     return NextResponse.json({ status: "unauthorized" }, { status: 401 });
   }
-  const userId = session.user.id as string;
+  const userId = session.user.id || session.user.email || null;
+  if (!userId) {
+    return NextResponse.json({ status: "unauthorized" }, { status: 401 });
+  }
+
+  await ensureDbReady();
 
   const token = await db.userToken.findFirst({ where: { userId, provider: "google" } });
 
