@@ -7,6 +7,7 @@ import { ParsedItemCard } from "@/components/ParsedItemCard";
 import { labelForField } from "@/lib/projectTaskTemplates";
 import { ParsedTaskList } from "@/components/ParsedTaskList";
 import { parseTasks, ParsedTaskItem } from "@/utils/parseTasks";
+import { PdfSinglePagePreview } from "@/components/PdfSinglePagePreview";
 
 type UploadStatus =
   | { type: "idle"; message: "" }
@@ -270,19 +271,7 @@ export function UploadForm() {
         <div className="rounded-xl border border-[#9bc4ff] bg-white p-4 shadow-sm h-full">
           <p className="text-sm font-semibold text-slate-700 mb-2">Document Preview</p>
           {previewUrl ? (
-            <object
-              data={previewUrl}
-              type="application/pdf"
-              className="w-full h-[90vh]"
-              style={{ objectFit: "contain" }}
-            >
-              <p className="p-3 text-xs text-slate-500">
-                Preview not supported.{" "}
-                <a className="text-[#377ddf] underline" href={previewUrl} target="_blank">
-                  Open PDF
-                </a>
-              </p>
-            </object>
+            <PdfSinglePagePreview url={previewUrl} zoom={0.78} />
           ) : (
             <p className="text-xs text-slate-500">No preview available.</p>
           )}
