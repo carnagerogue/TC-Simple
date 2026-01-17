@@ -15,6 +15,7 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
   const renderTaskRef = useRef<{ cancel?: () => void } | null>(null);
   const loadTaskRef = useRef<pdfjsLib.PDFDocumentLoadingTask | null>(null);
   const scrollLockRef = useRef(0);
+  const [visualZoom, setVisualZoom] = useState(1);
   const [doc, setDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [numPages, setNumPages] = useState(0);
@@ -24,6 +25,8 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
 
   const canPrev = pageNumber > 1;
   const canNext = numPages > 0 && pageNumber < numPages;
+  const canZoomOut = visualZoom > 0.5;
+  const canZoomIn = visualZoom < 2.5;
 
   const containerStyle = useMemo(
     () =>
@@ -130,6 +133,12 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
   const goNext = useCallback(() => setPageNumber((p) => Math.min(numPages || 1, p + 1)), [numPages]);
 
   const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (event.ctrlKey) {
+      event.preventDefault();
+      const direction = event.deltaY > 0 ? -0.1 : 0.1;
+      setVisualZoom((prev) => Math.min(2.5, Math.max(0.5, Number((prev + direction).toFixed(2)))));
+      return;
+    }
     if (numPages <= 1) return;
     event.preventDefault();
     const now = Date.now();
@@ -144,6 +153,32 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
       <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 text-xs text-slate-600">
         <span>Page {numPages ? `${pageNumber} / ${numPages}` : "—"}</span>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setVisualZoom((prev) => Math.max(0.5, Number((prev - 0.1).toFixed(2))))}
+            disabled={!canZoomOut}
+            className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+            title="Zoom out"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            onClick={() => setVisualZoom(1)}
+            className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            title="Reset zoom"
+          >
+            100%
+          </button>
+          <button
+            type="button"
+            onClick={() => setVisualZoom((prev) => Math.min(2.5, Number((prev + 0.1).toFixed(2))))}
+            disabled={!canZoomIn}
+            className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+            title="Zoom in"
+          >
+            +
+          </button>
           <button
             type="button"
             onClick={goPrev}
@@ -170,16 +205,26 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
         style={containerStyle}
         aria-label="PDF preview"
       >
-        <canvas ref={canvasRef} className="block" />
-        {error ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 text-xs text-red-600">
-            {error}
-          </div>
-        ) : loading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-xs text-slate-500">
-            Rendering...
-          </div>
-        ) : null}
+        <div
+          className="relative transition-transform duration-150"
+          style={{
+            width: pageSize?.width ? `${pageSize.width}px` : "100%",
+            height: pageSize?.height ? `${pageSize.height}px` : "100%",
+            transform: `scale(${visualZoom})`,
+            transformOrigin: "top center",
+          }}
+        >
+          <canvas ref={canvasRef} className="block" />
+          {error ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/80 text-xs text-red-600">
+              {error}
+            </div>
+          ) : loading ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-xs text-slate-500">
+              Rendering...
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
