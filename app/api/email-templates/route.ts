@@ -1,12 +1,21 @@
-import { NextResponse } from "next/server";
-import { PrismaClient, TemplateCategory, Prisma } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { db, ensureDbReady } from "@/lib/db";
+import { TemplateCategory, Prisma } from "@prisma/client";
+import { parseTags, tagsToString, validatePlaceholders } from "@/lib/emailTemplates";
 
 export const dynamic = "force-dynamic";
 
-const prisma = new PrismaClient();
-
 export async function GET(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    await ensureDbReady();
+
     const { searchParams } = new URL(request.url);
     
     // Extracting your query parameters
@@ -41,14 +50,100 @@ export async function GET(request: Request) {
       ];
     }
 
-    const templates = await prisma.emailTemplate.findMany({
+    const templates = await db.emailTemplate.findMany({
       where,
       orderBy: { updatedAt: 'desc' },
     });
 
-    return NextResponse.json(templates);
+    const stats = {
+      total: templates.length,
+      favorites: templates.filter((t) => t.favorite).length,
+      mostUsed: null as { name: string; count: number } | null,
+    };
+
+    return NextResponse.json({ templates, stats });
   } catch (error) {
     console.error("Error fetching templates:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
+}
+
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  await ensureDbReady();
+
+  const body = (await request.json().catch(() => null)) as
+    | {
+        name?: unknown;
+        category?: unknown;
+        description?: unknown;
+        subject?: unknown;
+        body?: unknown;
+        tags?: unknown;
+        favorite?: unknown;
+      }
+    | null;
+
+  const name = typeof body?.name === "string" ? body?.name.trim() : "";
+  const subject = typeof body?.subject === "string" ? body?.subject.trim() : "";
+  const tmplBody = typeof body?.body === "string" ? body?.body.trim() : "";
+  const description = typeof body?.description === "string" ? body?.description.trim() : null;
+
+  if (!name || !subject || !tmplBody) {
+    return NextResponse.json(
+      { error: "name, subject, and body are required" },
+      { status: 400 }
+    );
+  }
+
+  const categoryRaw = typeof body?.category === "string" ? body?.category.toUpperCase() : "GENERAL";
+  if (!(categoryRaw in TemplateCategory)) {
+    return NextResponse.json({ error: "Invalid category" }, { status: 400 });
+  }
+
+  const placeholderCheck = validatePlaceholders(`${subject}\n${tmplBody}`);
+  if (placeholderCheck.unknown.length) {
+    return NextResponse.json(
+      { error: "Unknown placeholders", unknown: placeholderCheck.unknown },
+      { status: 400 }
+    );
+  }
+
+  let tags: string | null = null;
+  if (typeof body?.tags === "string") {
+    tags = tagsToString(parseTags(body.tags));
+  } else if (Array.isArray(body?.tags)) {
+    const raw = body.tags.filter((t): t is string => typeof t === "string");
+    tags = tagsToString(parseTags(raw.join(",")));
+  }
+
+  const favorite = typeof body?.favorite === "boolean" ? body.favorite : false;
+
+  const created = await db.emailTemplate.create({
+    data: {
+      name,
+      category: categoryRaw as TemplateCategory,
+      description,
+      subject,
+      body: tmplBody,
+      tags,
+      favorite,
+      version: 1,
+    },
+  });
+
+  await db.emailTemplateVersion.create({
+    data: {
+      templateId: created.id,
+      version: created.version,
+      subject: created.subject,
+      body: created.body,
+    },
+  });
+
+  return NextResponse.json(created);
 }

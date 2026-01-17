@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string; version: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  await ensureDbReady();
 
   const versionNumber = Number(params.version);
   if (isNaN(versionNumber)) return NextResponse.json({ error: "Invalid version" }, { status: 400 });

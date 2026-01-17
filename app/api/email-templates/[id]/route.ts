@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { validatePlaceholders, parseTags, tagsToString } from "@/lib/emailTemplates";
 import { TemplateCategory } from "@prisma/client";
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  await ensureDbReady();
 
   const body = await req.json().catch(() => null);
   const { name, category, description, subject, body: tmplBody, tags, favorite } = body || {};
@@ -56,6 +58,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  await ensureDbReady();
 
   await db.emailTemplate.delete({ where: { id: params.id } });
   return NextResponse.json({ ok: true });
