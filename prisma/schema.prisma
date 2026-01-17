@@ -51,6 +51,7 @@ model Transaction {
   updatedAt     DateTime  @updatedAt
   
   tasks         Task[]
+  contacts      TransactionContact[]
 
   @@index([userId])
 }
@@ -180,6 +181,7 @@ model Contact {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   projectLinks    ProjectContact[]
+  transactionLinks TransactionContact[]
 
   @@index([userId, email])
   @@index([userId, category])
@@ -202,6 +204,7 @@ model ProjectContact {
   projectId  String
   contactId  String
   role       StakeholderRole
+  isPrimary  Boolean          @default(false)
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
 
@@ -213,6 +216,23 @@ model ProjectContact {
   @@index([contactId, role])
   @@index([contactId])
   @@index([projectId])
+}
+
+model TransactionContact {
+  id            String          @id @default(cuid())
+  transactionId String
+  contactId     String
+  role          StakeholderRole
+  isPrimary     Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  transaction   Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  contact       Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([transactionId, contactId, role])
+  @@index([transactionId])
+  @@index([contactId])
 }
 
 enum StakeholderRole {

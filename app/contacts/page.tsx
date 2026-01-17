@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ContactSkeleton } from "@/components/contacts/ContactSkeleton";
 import { ContactCard, ContactRecord, ContactCategory } from "@/components/contacts/ContactCard";
 import { AddContactModal } from "@/components/contacts/AddContactModal";
@@ -14,6 +15,7 @@ type ApiContact = ContactRecord & {
 };
 
 export default function ContactsPage() {
+  const router = useRouter();
   const [contacts, setContacts] = useState<ApiContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -253,8 +255,7 @@ export default function ContactsPage() {
                   handleDelete(contact).catch((err) => setError(err.message));
                 }}
                 onView={(contact) => {
-                  setEditing(contact);
-                  setModalOpen(true);
+                  router.push(`/contacts/${contact.id}`);
                 }}
                 onHistory={(contact) => {
                   setHistoryContactId(contact.id);

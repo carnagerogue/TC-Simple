@@ -8,6 +8,7 @@ import { TagEditModal } from "./TagEditModal";
 import { TaskDetailModal } from "./TaskDetailModal";
 import { ProjectMiniCalendar } from "./ProjectMiniCalendar";
 import { ProjectGoogleCalendarPanel } from "./ProjectGoogleCalendarPanel";
+import { ProjectLinkedContactsPanel } from "./ProjectLinkedContactsPanel";
 import { extractRoleFromTags, tagsIncludeEmail, renderTemplate, normalizeRoleToStakeholder } from "@/lib/emailHelpers";
 import { extractEmailRolesFromTags, emailRoleLabel, emailRoleToStakeholder } from "@/lib/emailTagging";
 import type { EmailRecipientRole } from "@/lib/emailTagging";
@@ -413,6 +414,9 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
             onModalSettled={() => setForceStakeholderModal(false)}
             onClientRoleChange={(role) => updateMyClientRole(role)}
           />
+          <div className="mt-4">
+            <ProjectLinkedContactsPanel projectId={projectId} />
+          </div>
           <div className="mt-4">
             <ProjectGoogleCalendarPanel />
           </div>
