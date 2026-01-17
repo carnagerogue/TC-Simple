@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ParsedItemCard } from "@/components/ParsedItemCard";
 import { labelForField } from "@/lib/projectTaskTemplates";
+import { ParsedTaskList } from "@/components/ParsedTaskList";
+import { parseTasks, ParsedTaskItem } from "@/utils/parseTasks";
 
 type UploadStatus =
   | { type: "idle"; message: "" }
@@ -19,13 +21,6 @@ type ParsedItem = {
   label: string;
   value: string | string[];
   selected: boolean;
-};
-
-type ParserResponse = {
-  fields?: Record<string, unknown>;
-  extracted?: Record<string, unknown>;
-  tasks?: string[];
-  choices?: Array<{ message?: { content?: string } }>;
 };
 
 function normalizeValue(field: string, value: unknown): string | string[] {
@@ -52,40 +47,6 @@ function buildParsedItems(parsed: Record<string, unknown> | null): ParsedItem[] 
     }));
 }
 
-async function uploadToParser(file: File) {
-  const form = new FormData();
-  form.append("file", file);
-
-  const res = await fetch("/api/parser", {
-    method: "POST",
-    body: form,
-  });
-
-  const raw = await res.text().catch(() => "");
-  const parseJson = () => {
-    try {
-      return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-    } catch {
-      return null;
-    }
-  };
-
-  if (!res.ok) {
-    const body = parseJson();
-    const message =
-      (body && typeof body.error === "string" && body.error) ||
-      raw ||
-      `Parser request failed (${res.status})`;
-    throw new Error(message);
-  }
-
-  const body = parseJson();
-  if (!body) {
-    throw new Error(`Parser returned non-JSON (${res.status}).`);
-  }
-  return body;
-}
-
 export function UploadForm() {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<UploadStatus>(initialStatus);
@@ -94,6 +55,7 @@ export function UploadForm() {
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [parsedItems, setParsedItems] = useState<ParsedItem[]>([]);
+  const [parsedTasks, setParsedTasks] = useState<ParsedTaskItem[]>([]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [ctaHighlight, setCtaHighlight] = useState(false);
   const parsedSectionRef = useRef<HTMLDivElement | null>(null);
@@ -150,33 +112,14 @@ export function UploadForm() {
     setTransactionId(null);
     setDocumentId(null);
     setParsedItems([]);
+    setParsedTasks([]);
 
     try {
-      // Try parser first (optional). If it fails, continue with upload-only mode.
-      let extracted: Record<string, unknown> | null = null;
-      let parserWarning = "";
-      try {
-        const parsed = (await uploadToParser(file)) as ParserResponse;
-        extracted = parsed.fields ?? parsed.extracted ?? null;
-        if (!extracted && parsed?.choices) {
-          const raw = parsed.choices?.[0]?.message?.content ?? "";
-          try {
-            extracted = JSON.parse(raw.replace(/```json|```/g, ""));
-          } catch (_) {
-            extracted = null;
-          }
-        }
-        setParsedItems(buildParsedItems(extracted));
-      } catch (e: unknown) {
-        parserWarning = e instanceof Error ? e.message : "Parser unavailable";
-        // Don't block the flow—upload still creates a transaction with best-effort parsing server-side.
-        console.warn("Parser failed; continuing without parser:", e);
-      }
-
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/upload", {
+      // Single-source-of-truth: parse server-side via intake-service (OpenAI) and require it.
+      const response = await fetch("/api/upload?requireParse=1", {
         method: "POST",
         body: formData,
       });
@@ -209,21 +152,21 @@ export function UploadForm() {
               : `Uploaded ${
                   (typeof payload.fileName === "string" && payload.fileName) || file.name
                 } successfully.${driveMsg}`;
-          return `${msg}${parserWarning ? ` (Parser unavailable: ${parserWarning})` : ""}`;
+          return msg;
         })(),
       });
       setFile(null);
       setTransactionId(typeof payload.transactionId === "string" ? payload.transactionId : null);
       setDocumentId(typeof payload.documentId === "string" ? payload.documentId : null);
       const parsedSource =
-        extracted ||
-        (payload.parsedData && typeof payload.parsedData === "object" && !Array.isArray(payload.parsedData)
+        payload.parsedData && typeof payload.parsedData === "object" && !Array.isArray(payload.parsedData)
           ? (payload.parsedData as Record<string, unknown>)
-          : null);
+          : null;
       if (typeof payload.documentId === "string" && payload.documentId) {
         setPreviewUrl(`/api/documents/${payload.documentId}`);
       }
       setParsedItems(buildParsedItems(parsedSource));
+      setParsedTasks(parseTasks(parsedSource?.tasks));
       setTimeout(() => {
         parsedSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 150);
@@ -351,60 +294,75 @@ export function UploadForm() {
           ref={parsedSectionRef}
           className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-3"
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-gray-900">Parsed Items</p>
-              <p className="text-xs text-gray-500">
-                Toggle which parsed items to convert into a project and tasks.
-              </p>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Parsed Fields</p>
+                  <p className="text-xs text-gray-500">
+                    Toggle which fields to use for project creation and task generation.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allSelected = parsedItems.every((i) => i.selected);
+                    setParsedItems((prev) => prev.map((p) => ({ ...p, selected: !allSelected })));
+                  }}
+                  className="text-sm font-medium text-[#9bc4ff] hover:underline"
+                >
+                  Select All
+                </button>
+              </div>
+              <div className="space-y-2">
+                {parsedItems.map((item) => (
+                  <ParsedItemCard
+                    key={item.field}
+                    field={item.field}
+                    label={item.label}
+                    value={item.value}
+                    selected={item.selected}
+                    onToggle={() =>
+                      setParsedItems((prev) =>
+                        prev.map((p) => (p.field === item.field ? { ...p, selected: !p.selected } : p))
+                      )
+                    }
+                  />
+                ))}
+                {parsedItems.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    No fields detected. This usually means the contract text extraction/OCR failed.
+                  </p>
+                ) : null}
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                const allSelected = parsedItems.every((i) => i.selected);
-                setParsedItems((prev) => prev.map((p) => ({ ...p, selected: !allSelected })));
-              }}
-              className="text-sm font-medium text-[#9bc4ff] hover:underline"
-            >
-              Select All
-            </button>
-          </div>
-          <div className="space-y-2">
-            {parsedItems.map((item) => (
-              <ParsedItemCard
-                key={item.field}
-                field={item.field}
-                label={item.label}
-                value={item.value}
-                selected={item.selected}
-                onToggle={() =>
-                  setParsedItems((prev) =>
-                    prev.map((p) =>
-                      p.field === item.field ? { ...p, selected: !p.selected } : p
-                    )
-                  )
-                }
-              />
-            ))}
-            {parsedItems.length === 0 ? (
-              <p className="text-xs text-gray-500">No parsed items found.</p>
-            ) : null}
+
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Actionable Tasks (from OpenAI)</p>
+                <p className="text-xs text-gray-500">
+                  Review and adjust tasks that were generated from the PDF.
+                </p>
+              </div>
+              <ParsedTaskList tasks={parsedTasks} onChange={setParsedTasks} />
+            </div>
           </div>
         </div>
       ) : null}
 
       {/* Removed old follow-up task section */}
 
-      {status.type === "success" && parsedItems.length > 0 ? (
+      {status.type === "success" && (parsedItems.length > 0 || parsedTasks.some((t) => t.checked)) ? (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-md flex justify-end">
           <button
             type="button"
-            disabled={parsedItems.filter((p) => p.selected).length === 0}
+            disabled={parsedItems.filter((p) => p.selected).length === 0 && parsedTasks.filter((t) => t.checked).length === 0}
             onClick={() => {
               const payload = {
                 items: parsedItems,
                 transactionId,
                 documentId,
+                tasks: parsedTasks.filter((t) => t.checked).map((t) => t.label),
               };
               if (typeof window !== "undefined") {
                 sessionStorage.setItem("tc-simple-new-project", JSON.stringify(payload));

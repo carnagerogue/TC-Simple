@@ -87,6 +87,7 @@ export default function NewProjectPage() {
     try {
       const parsed = JSON.parse(stored) as {
         items?: Array<{ field?: unknown; label?: unknown; value?: unknown; selected?: unknown }>;
+        tasks?: unknown;
         transactionId?: unknown;
         documentId?: unknown;
       };
@@ -109,13 +110,31 @@ export default function NewProjectPage() {
       const address = summary["property_address"];
       const defaultName = [buyer, address].filter(Boolean).join(" / ") || "New Project";
       setProjectName(defaultName);
-      const generated = generateTasksFromParsed(
-        parsedItems.filter((i) => i.selected).map((i) => ({ field: i.field, value: i.value }))
-      ).map((t) => ({
-        ...t,
-        selected: true,
-      }));
-      setTasks(generated);
+
+      const providedTaskStrings = Array.isArray(parsed.tasks)
+        ? parsed.tasks.filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+        : [];
+
+      if (providedTaskStrings.length > 0) {
+        setTasks(
+          providedTaskStrings.map((title) => ({
+            title,
+            dueDate: null,
+            requiresEmail: false,
+            emailRecipientRole: null,
+            selected: true,
+            tags: "ai",
+          }))
+        );
+      } else {
+        const generated = generateTasksFromParsed(
+          parsedItems.filter((i) => i.selected).map((i) => ({ field: i.field, value: i.value }))
+        ).map((t) => ({
+          ...t,
+          selected: true,
+        }));
+        setTasks(generated);
+      }
     } catch (e) {
       console.error("Failed to parse stored project data", e);
     }
