@@ -20,79 +20,78 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const dbTransactions = await db.transaction.findMany({
-    where: {
-      userId,
-    },
-    include: { tasks: true },
-    orderBy: { createdAt: "desc" },
-  });
+  try {
+    const dbTransactions = await db.transaction.findMany({
+      where: {
+        userId,
+      },
+      include: { tasks: true },
+      orderBy: { createdAt: "desc" },
+    });
 
-  const transactions = dbTransactions.map((txn) => ({
-    id: txn.id,
-    name: txn.address,
-    stage: (txn.stage as "Intake" | "Under Contract" | "Closing") || "Intake",
-    progress: txn.progress,
-    agent: "Unknown Agent",
-    client: txn.buyerName || txn.sellerName || "Unknown Client",
-    deadlines: txn.tasks
-      .filter((t) => t.dueDate)
-      .slice(0, 3)
-      .map((t) => ({
-        label: t.title,
-        date: t.dueDate
-          ? t.dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-          : "",
-      })),
-  }));
-
-  const primaryTxn = dbTransactions[0];
-
-  const primaryDeadlines = primaryTxn
-    ? primaryTxn.tasks
+    const transactions = dbTransactions.map((txn) => ({
+      id: txn.id,
+      name: txn.address,
+      stage: (txn.stage as "Intake" | "Under Contract" | "Closing") || "Intake",
+      progress: txn.progress,
+      agent: "Unknown Agent",
+      client: txn.buyerName || txn.sellerName || "Unknown Client",
+      deadlines: txn.tasks
         .filter((t) => t.dueDate)
+        .slice(0, 3)
         .map((t) => ({
-          id: t.id,
-          milestone: t.title,
-          property: primaryTxn.address,
-          date: t.dueDate!.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-          status: (t.status as "upcoming" | "overdue" | "completed") || "upcoming",
-        }))
-    : [];
+          label: t.title,
+          date: t.dueDate ? t.dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "",
+        })),
+    }));
 
-  const primaryProjects = await db.project.findMany({
-    where: { userId, isPrimary: true },
-    include: { tasks: true },
-    orderBy: { updatedAt: "desc" },
-  });
+    const primaryTxn = dbTransactions[0];
 
-  const activeProjects = await db.project.findMany({
-    where: { userId, status: { not: "completed" }, isPrimary: false },
-    include: { tasks: true },
-    orderBy: { updatedAt: "desc" },
-  });
+    const primaryDeadlines = primaryTxn
+      ? primaryTxn.tasks
+          .filter((t) => t.dueDate)
+          .map((t) => ({
+            id: t.id,
+            milestone: t.title,
+            property: primaryTxn.address,
+            date: t.dueDate!.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            status: (t.status as "upcoming" | "overdue" | "completed") || "upcoming",
+          }))
+      : [];
 
-  const completedProjects = await db.project.findMany({
-    where: { userId, status: "completed" },
-    include: { tasks: true },
-    orderBy: { updatedAt: "desc" },
-  });
+    const primaryProjects = await db.project.findMany({
+      where: { userId, isPrimary: true },
+      include: { tasks: true },
+      orderBy: { updatedAt: "desc" },
+    });
 
-  const priorityTasks = await db.projectTask.findMany({
-    where: {
-      priority: true,
-      project: {
-        is: {
-          userId,
+    const activeProjects = await db.project.findMany({
+      where: { userId, status: { not: "completed" }, isPrimary: false },
+      include: { tasks: true },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    const completedProjects = await db.project.findMany({
+      where: { userId, status: "completed" },
+      include: { tasks: true },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    const priorityTasks = await db.projectTask.findMany({
+      where: {
+        priority: true,
+        project: {
+          is: {
+            userId,
+          },
         },
       },
-    },
-    include: { project: true },
-    orderBy: { updatedAt: "desc" },
-  });
+      include: { project: true },
+      orderBy: { updatedAt: "desc" },
+    });
 
-  return (
-    <div className="flex w-full flex-col gap-6 px-6 pb-10">
+    return (
+      <div className="flex w-full flex-col gap-6 px-6 pb-10">
         <div className="flex items-center justify-between rounded-3xl border border-slate-200/60 bg-white/80 px-6 py-5 shadow-sm backdrop-blur">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Dashboard</p>
@@ -149,9 +148,7 @@ export default async function DashboardPage() {
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Deadlines</p>
               <h2 className="text-lg font-semibold">Near-term dates</h2>
             </div>
-            <span className="text-xs text-slate-500">
-              {primaryDeadlines.length} due
-            </span>
+            <span className="text-xs text-slate-500">{primaryDeadlines.length} due</span>
           </div>
           <div className="mt-3 space-y-2">
             {primaryDeadlines.map((d) => (
@@ -204,6 +201,28 @@ export default async function DashboardPage() {
             tasks: p.tasks.map((t) => ({ status: t.status })),
           }))}
         />
-    </div>
-  );
+      </div>
+    );
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Unknown server error";
+    console.error("[dashboard] DB query failed", e);
+    return (
+      <div className="mx-auto max-w-3xl px-6 py-16">
+        <h1 className="text-2xl font-semibold text-slate-900">Setup required</h1>
+        <p className="mt-2 text-slate-600">
+          The app is running, but the database isn’t accessible yet. This usually means{" "}
+          <code className="rounded bg-slate-100 px-1">DATABASE_URL</code> is missing/invalid, or the DB schema hasn’t
+          been applied.
+        </p>
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+          <p className="font-semibold">Server error</p>
+          <p className="mt-1 break-words">{message}</p>
+        </div>
+        <p className="mt-4 text-slate-600">
+          Open <code className="rounded bg-slate-100 px-1">/api/health</code> to see which environment variables and
+          tables are missing.
+        </p>
+      </div>
+    );
+  }
 }
