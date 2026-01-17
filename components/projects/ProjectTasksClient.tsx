@@ -6,6 +6,7 @@ import { ProjectStakeholderList, Stakeholder } from "./ProjectStakeholderList";
 import { EmailDraftModal } from "./EmailDraftModal";
 import { TagEditModal } from "./TagEditModal";
 import { TaskDetailModal } from "./TaskDetailModal";
+import { ProjectMiniCalendar } from "./ProjectMiniCalendar";
 import { extractRoleFromTags, tagsIncludeEmail, renderTemplate, normalizeRoleToStakeholder } from "@/lib/emailHelpers";
 import { extractEmailRolesFromTags, emailRoleLabel, emailRoleToStakeholder } from "@/lib/emailTagging";
 import type { EmailRecipientRole } from "@/lib/emailTagging";
@@ -304,6 +305,15 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
     }
   };
 
+  const openTaskFromCalendar = useCallback(
+    (taskId: string) => {
+      const task = tasks.find((t) => t.id === taskId) || null;
+      if (!task) return;
+      setDetailModal({ open: true, task });
+    },
+    [tasks]
+  );
+
   return (
     <div className="min-h-screen bg-[#f8fafc] pt-24">
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 pb-8 lg:flex-row lg:gap-8">
@@ -364,6 +374,13 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
             onModalSettled={() => setForceStakeholderModal(false)}
             onClientRoleChange={(role) => updateMyClientRole(role)}
           />
+          <div className="mt-4">
+            <ProjectMiniCalendar
+              tasks={tasks}
+              onOpenTask={(task) => openTaskFromCalendar(task.id)}
+              onSetDueDate={(taskId, nextDate) => updateDueDate(taskId, nextDate)}
+            />
+          </div>
         </div>
       </div>
 
