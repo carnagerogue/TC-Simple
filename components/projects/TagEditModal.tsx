@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TASK_TAG_SUGGESTIONS, getTagLabel } from "@/lib/taskTags";
+import { TASK_ROLE_TAGS, TASK_WORKFLOW_TAGS, getTagLabel } from "@/lib/taskTags";
+import { EMAIL_TAG_SUGGESTIONS, getEmailTagMeta } from "@/lib/emailTagging";
 
 type Props = {
   open: boolean;
@@ -30,23 +31,77 @@ export function TagEditModal({ open, initialTags, onClose, onSave }: Props) {
           value={value}
           onChange={(e) => setValue(e.target.value)}
         />
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          {TASK_TAG_SUGGESTIONS.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => {
-                const parts = value.split(",").map((p) => p.trim()).filter(Boolean);
-                if (!parts.includes(t)) {
-                  const next = [...parts, t].join(", ");
-                  setValue(next);
-                }
-              }}
-              className="rounded-full bg-[#eaf2ff] px-3 py-1 text-[#1b4c96] hover:bg-[#d7e8ff]"
-            >
-              {getTagLabel(t)}
-            </button>
-          ))}
+        <div className="mt-3 space-y-3 text-xs">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Roles</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {TASK_ROLE_TAGS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    const parts = value.split(",").map((p) => p.trim()).filter(Boolean);
+                    if (!parts.includes(t)) {
+                      const next = [...parts, t].join(", ");
+                      setValue(next);
+                    }
+                  }}
+                  className="rounded-full bg-[#eaf2ff] px-3 py-1 text-[#1b4c96] hover:bg-[#d7e8ff]"
+                >
+                  {getTagLabel(t)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Workflow</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {TASK_WORKFLOW_TAGS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    const parts = value.split(",").map((p) => p.trim()).filter(Boolean);
+                    if (!parts.includes(t)) {
+                      const next = [...parts, t].join(", ");
+                      setValue(next);
+                    }
+                  }}
+                  className="rounded-full bg-slate-100 px-3 py-1 text-slate-700 hover:bg-slate-200"
+                >
+                  {getTagLabel(t)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Email</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Email tags enable sending a template email from this task.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {EMAIL_TAG_SUGGESTIONS.map(({ token, role }) => {
+                const meta = getEmailTagMeta(role);
+                return (
+                  <button
+                    key={token}
+                    type="button"
+                    onClick={() => {
+                      const parts = value.split(",").map((p) => p.trim()).filter(Boolean);
+                      if (!parts.includes(token)) {
+                        const next = [...parts, token].join(", ");
+                        setValue(next);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-indigo-700 hover:bg-indigo-100"
+                  >
+                    <span aria-hidden>✉</span>
+                    {meta.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <button

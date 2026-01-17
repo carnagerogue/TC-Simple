@@ -11,6 +11,11 @@ type Recipient = {
   roleLabel?: string;
 };
 
+type RecipientOption = Recipient & {
+  id: string;
+  role?: string;
+};
+
 type Stakeholder = {
   role: string;
   contact: { firstName?: string | null; lastName?: string | null; email?: string | null; phone?: string | null; company?: string | null };
@@ -20,6 +25,8 @@ type Props = {
   open: boolean;
   onClose: () => void;
   recipient?: Recipient | null;
+  recipients?: RecipientOption[];
+  selectedRecipientId?: string | null;
   subject?: string;
   body?: string;
   projectId: string;
@@ -27,6 +34,11 @@ type Props = {
   stakeholders?: Stakeholder[];
   projectSummary?: Record<string, string | number | null | undefined> | null;
   contextRole?: string | null;
+  templateId?: string | null;
+  onRecipientChange?: (recipientId: string) => void;
+  onTemplateUsed?: (templateId: string) => void;
+  onComposed?: () => void;
+  onAddStakeholder?: () => void;
 };
 
 type Template = {
@@ -47,6 +59,8 @@ export function EmailDraftModal({
   open,
   onClose,
   recipient,
+  recipients = [],
+  selectedRecipientId,
   subject,
   body,
   projectId,
@@ -54,10 +68,19 @@ export function EmailDraftModal({
   stakeholders = [],
   projectSummary = {},
   contextRole,
+  templateId,
+  onRecipientChange,
+  onTemplateUsed,
+  onComposed,
+  onAddStakeholder,
 }: Props) {
   const [subj, setSubj] = useState(subject || "");
   const [msg, setMsg] = useState(body || "");
   const [sending, setSending] = useState(false);
+  const [hasEdited, setHasEdited] = useState(false);
+  const [recipientId, setRecipientId] = useState(selectedRecipientId || "");
+  const [canSend, setCanSend] = useState(false);
+  const [sendHint, setSendHint] = useState<string | null>(null);
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -71,9 +94,50 @@ export function EmailDraftModal({
     if (open) {
       setSubj(subject || "");
       setMsg(body || "");
+      setHasEdited(false);
       prefetchTemplates();
     }
   }, [open, subject, body]);
+
+  useEffect(() => {
+    if (!open) return;
+    let mounted = true;
+    setCanSend(false);
+    setSendHint(null);
+    fetch("/api/google/status", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data: { status?: string }) => {
+        if (!mounted) return;
+        if (data.status === "ok") {
+          setCanSend(true);
+        } else {
+          setCanSend(false);
+          setSendHint("Connect Google to send email directly.");
+        }
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setCanSend(false);
+        setSendHint("Connect Google to send email directly.");
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (selectedRecipientId) {
+      setRecipientId(selectedRecipientId);
+      return;
+    }
+    if (recipients.length === 1) {
+      setRecipientId(recipients[0].id);
+      onRecipientChange?.(recipients[0].id);
+      return;
+    }
+    setRecipientId("");
+  }, [open, selectedRecipientId, recipients, onRecipientChange]);
 
   const prefetchTemplates = async () => {
     try {
@@ -108,9 +172,16 @@ export function EmailDraftModal({
       .sort((a, b) => Number(b.favorite) - Number(a.favorite));
   }, [templates, templateCategory, templateSearch]);
 
+  const activeRecipient = useMemo(() => {
+    if (recipients.length > 0) {
+      return recipients.find((r) => r.id === recipientId) || null;
+    }
+    return recipient || null;
+  }, [recipients, recipientId, recipient]);
+
   const recommendedTemplates = useMemo(() => {
     const role = (contextRole || "").toLowerCase();
-    const keywords = `${subject || ""} ${body || ""}`.toLowerCase();
+    const keywords = `${subject || ""} ${body || ""} ${(tags || "")}`.toLowerCase();
     return filteredTemplates.filter((t) => {
       const roleMatch =
         (role.includes("buyer") && (t.category === "BUYER" || t.category === "GENERAL")) ||
@@ -131,7 +202,30 @@ export function EmailDraftModal({
           : false;
       return roleMatch || kwMatch;
     });
-  }, [filteredTemplates, contextRole, subject, body]);
+  }, [filteredTemplates, contextRole, subject, body, tags]);
+
+  useEffect(() => {
+    if (!open) return;
+    const role = (contextRole || "").toLowerCase();
+    if (role.includes("buyer")) setTemplateCategory("BUYER");
+    else if (role.includes("seller")) setTemplateCategory("SELLER");
+    else if (role.includes("agent")) setTemplateCategory("AGENT");
+    else if (role.includes("lender")) setTemplateCategory("LENDER");
+    else if (role.includes("escrow") || role.includes("title")) setTemplateCategory("ESCROW");
+    else setTemplateCategory("ALL");
+  }, [open, contextRole]);
+
+  useEffect(() => {
+    if (!open || selectedTemplate || hasEdited || templates.length === 0) return;
+    const preferred =
+      (templateId ? templates.find((t) => t.id === templateId) : null) ||
+      recommendedTemplates[0] ||
+      filteredTemplates[0] ||
+      null;
+    if (preferred) {
+      handleUseTemplate(preferred, true);
+    }
+  }, [open, selectedTemplate, hasEdited, templates, templateId, recommendedTemplates, filteredTemplates]);
 
   const renderedPreview = useMemo(() => {
     if (!selectedTemplate) return { subject: "", body: "" };
@@ -149,7 +243,7 @@ export function EmailDraftModal({
   }, [selectedTemplate, projectSummary, stakeholders]);
 
   const handleSend = async () => {
-    if (!recipient?.email) {
+    if (!activeRecipient?.email) {
       alert("Missing recipient email");
       return;
     }
@@ -160,7 +254,7 @@ export function EmailDraftModal({
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          to: [recipient.email],
+          to: [activeRecipient.email],
           subject: subj || "TC Simple Update",
           body: msg,
           projectId,
@@ -169,6 +263,7 @@ export function EmailDraftModal({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Unable to send email");
+      onComposed?.();
       onClose();
     } catch (e: unknown) {
       const error = e as { message?: string };
@@ -178,9 +273,9 @@ export function EmailDraftModal({
     }
   };
 
-  const handleUseTemplate = (tmpl: Template) => {
+  const handleUseTemplate = (tmpl: Template, force = false) => {
     const hasEdits = (subj || "").trim().length || (msg || "").trim().length;
-    if (hasEdits) {
+    if (hasEdits && !force) {
       const confirmed = confirm("Replace current draft with selected template?");
       if (!confirmed) return;
     }
@@ -189,6 +284,8 @@ export function EmailDraftModal({
     setSubj(renderedSubject);
     setMsg(renderedBody);
     setSelectedTemplate(tmpl);
+    setHasEdited(false);
+    onTemplateUsed?.(tmpl.id);
   };
 
   useEffect(() => {
@@ -237,18 +334,87 @@ export function EmailDraftModal({
             <div className="mt-4 space-y-3">
               <div>
                 <label className="text-xs font-semibold text-slate-600">To</label>
-                <div className="mt-1 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
-                  <span>
-                    {recipient?.email || "Missing recipient"}{" "}
-                    {recipient?.roleLabel ? <span className="text-slate-500">({recipient.roleLabel})</span> : null}
-                  </span>
+                {recipients.length > 1 ? (
+                  <select
+                    value={recipientId}
+                    onChange={(e) => {
+                      setRecipientId(e.target.value);
+                      onRecipientChange?.(e.target.value);
+                    }}
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
+                  >
+                    <option value="">Select recipient</option>
+                    {recipients.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name || r.email || "Recipient"} {r.roleLabel ? `(${r.roleLabel})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="mt-1 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                    <span>
+                      {activeRecipient?.email || recipient?.email || "Missing recipient"}{" "}
+                      {activeRecipient?.roleLabel || recipient?.roleLabel ? (
+                        <span className="text-slate-500">
+                          ({activeRecipient?.roleLabel || recipient?.roleLabel})
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                )}
+                {(recipients.length === 0 || (activeRecipient && !activeRecipient.email)) && (
+                  <div className="mt-2 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    <span>No email on file for this role. Add stakeholder email to send.</span>
+                    {onAddStakeholder ? (
+                      <button
+                        type="button"
+                        onClick={onAddStakeholder}
+                        className="rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800"
+                      >
+                        Add stakeholder
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600">Template</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <select
+                    value={selectedTemplate?.id || ""}
+                    onChange={(e) => {
+                      const tmpl = templates.find((t) => t.id === e.target.value);
+                      if (tmpl) handleUseTemplate(tmpl);
+                    }}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
+                  >
+                    <option value="">Select a template</option>
+                    {recommendedTemplates.slice(0, 5).map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setDrawerOpen((p) => !p)}
+                    className="rounded-md border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Browse
+                  </button>
                 </div>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Templates are filtered by recipient role and task keywords.
+                </p>
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600">Subject</label>
                 <input
                   value={subj}
-                  onChange={(e) => setSubj(e.target.value)}
+                  onChange={(e) => {
+                    setSubj(e.target.value);
+                    setHasEdited(true);
+                  }}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
                   placeholder="Subject"
                 />
@@ -257,7 +423,10 @@ export function EmailDraftModal({
                 <label className="text-xs font-semibold text-slate-600">Body</label>
                 <textarea
                   value={msg}
-                  onChange={(e) => setMsg(e.target.value)}
+                  onChange={(e) => {
+                    setMsg(e.target.value);
+                    setHasEdited(true);
+                  }}
                   rows={10}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-[#9bc4ff] focus:outline-none focus:ring-2 focus:ring-[#9bc4ff33]"
                   placeholder="Write your message..."
@@ -285,20 +454,45 @@ export function EmailDraftModal({
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(
+                    `To: ${activeRecipient?.email || ""}\nSubject: ${subj}\n\n${msg}`
+                  );
+                  onComposed?.();
+                }}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Copy Email
+              </button>
+              <a
+                href={`mailto:${encodeURIComponent(activeRecipient?.email || "")}?subject=${encodeURIComponent(
+                  subj
+                )}&body=${encodeURIComponent(msg)}`}
+                onClick={() => onComposed?.()}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Open in Email
+              </a>
+              <button
+                type="button"
                 onClick={onClose}
                 className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 disabled={sending}
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={handleSend}
-                disabled={sending}
-                className="rounded-lg bg-[#0275ff] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#0169e6] disabled:opacity-60"
-              >
-                {sending ? "Sending…" : "Send Email"}
-              </button>
+              {canSend ? (
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={sending}
+                  className="rounded-lg bg-[#0275ff] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#0169e6] disabled:opacity-60"
+                >
+                  {sending ? "Sending…" : "Send via Gmail"}
+                </button>
+              ) : (
+                <span className="text-[11px] text-slate-500 self-center">{sendHint}</span>
+              )}
             </div>
           </div>
 

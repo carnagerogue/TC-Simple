@@ -118,7 +118,17 @@ export function getTaskTags(tags?: string | null): TaskTag[] {
   return Array.from(ids).map((id) => TAG_DEFS[id]).filter(Boolean);
 }
 
-export const TASK_TAG_SUGGESTIONS = [
+const EMAIL_TOKEN_PREFIX = "email:";
+
+export function getEmailTagTokens(tags?: string | null): string[] {
+  if (!tags) return [];
+  return tags
+    .split(",")
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => t.startsWith(EMAIL_TOKEN_PREFIX));
+}
+
+export const TASK_ROLE_TAGS = [
   "buyer_client",
   "seller_client",
   "buyer_agent",
@@ -131,6 +141,9 @@ export const TASK_TAG_SUGGESTIONS = [
   "attorney",
   "hoa",
   "vendor",
+];
+
+export const TASK_WORKFLOW_TAGS = [
   "closing",
   "finance",
   "compliance",
@@ -143,6 +156,8 @@ export const TASK_TAG_SUGGESTIONS = [
   "send",
   "followup",
 ];
+
+export const TASK_TAG_SUGGESTIONS = [...TASK_ROLE_TAGS, ...TASK_WORKFLOW_TAGS];
 
 export function getTagLabel(tagId: string) {
   return TAG_DEFS[tagId]?.label ?? tagId;

@@ -21,7 +21,7 @@ export function generateTasksFromParsed(items: ParsedFieldItem[]): GeneratedTask
     dueDate: null,
     requiresEmail: true,
     emailRecipientRole: "buyer",
-    tags: "email,to:buyer,send,confirm",
+    tags: "email:buyer_client,send,confirm,contract",
   });
   tasks.push({
     title: "Confirm receipt of Lead-Based Paint pamphlet",
@@ -35,7 +35,7 @@ export function generateTasksFromParsed(items: ParsedFieldItem[]): GeneratedTask
     dueDate: null,
     requiresEmail: true,
     emailRecipientRole: "seller",
-    tags: "email,to:seller,request,document",
+    tags: "email:seller_client,request,contract",
   });
   tasks.push({
     title: "Confirm earnest money deposit",
@@ -49,14 +49,14 @@ export function generateTasksFromParsed(items: ParsedFieldItem[]): GeneratedTask
     dueDate: null,
     requiresEmail: true,
     emailRecipientRole: "buyer",
-    tags: "email,to:buyer,reminder,lender",
+    tags: "email:buyer_client,reminder,lender",
   });
   tasks.push({
     title: "Request preliminary title commitment",
     dueDate: null,
     requiresEmail: true,
     emailRecipientRole: "title_company",
-    tags: "email,to:escrow,request,title",
+    tags: "email:escrow,request,title",
   });
   tasks.push({
     title: "Obtain buyer's closing disclosure",
@@ -70,7 +70,7 @@ export function generateTasksFromParsed(items: ParsedFieldItem[]): GeneratedTask
     dueDate: null,
     requiresEmail: true,
     emailRecipientRole: "buyer",
-    tags: "email,to:buyer,followup",
+    tags: "email:buyer_client,followup",
   });
 
   // Add dynamic review tasks for included items
@@ -93,7 +93,7 @@ export function generateTasksFromParsed(items: ParsedFieldItem[]): GeneratedTask
       dueDate: null,
       requiresEmail: false,
       emailRecipientRole: null,
-      tags: "confirm,buyer",
+      tags: "confirm,buyer_client",
     });
   }
   if (seller) {
@@ -102,7 +102,7 @@ export function generateTasksFromParsed(items: ParsedFieldItem[]): GeneratedTask
       dueDate: null,
       requiresEmail: false,
       emailRecipientRole: null,
-      tags: "confirm,seller",
+      tags: "confirm,seller_client",
     });
   }
   if (titleCo) {
@@ -111,7 +111,7 @@ export function generateTasksFromParsed(items: ParsedFieldItem[]): GeneratedTask
       dueDate: null,
       requiresEmail: true,
       emailRecipientRole: "title_company",
-      tags: "email,to:escrow,coordinate,title",
+      tags: "email:escrow,coordinate,title",
     });
   }
 

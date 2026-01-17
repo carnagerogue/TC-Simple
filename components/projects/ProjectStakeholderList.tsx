@@ -28,6 +28,7 @@ const ROLE_LABELS: Record<string, string> = {
   BUYER_AGENT: "Buyer Agent",
   SELLER_AGENT: "Seller Agent",
   ESCROW: "Escrow",
+  INSPECTOR: "Inspector",
   VENDOR: "Vendor",
   LENDER: "Lender",
   TITLE: "Title",

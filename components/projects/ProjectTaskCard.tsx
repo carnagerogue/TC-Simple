@@ -203,10 +203,10 @@ export function ProjectTaskCard({
               e.stopPropagation();
               onDraftEmail?.();
             }}
-            className="rounded-md border border-[#1b4c96] bg-[#eaf2ff] px-2 py-1 text-[#1b4c96] hover:bg-[#d6e6ff]"
-            title="Draft email"
+            className="inline-flex items-center gap-1 rounded-md border border-[#1b4c96] bg-[#eaf2ff] px-2 py-1 text-[#1b4c96] hover:bg-[#d6e6ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9bc4ff]"
+            title="Email from task"
           >
-            Draft Email
+            ✉ Email
           </button>
         ) : null}
         <button

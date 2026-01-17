@@ -116,6 +116,10 @@ model ProjectTask {
   tags       String?
   notes      String?
   priority   Boolean   @default(false)
+  emailRecipientRole String?
+  emailRecipientEmail String?
+  emailTemplateId     String?
+  emailLastComposedAt DateTime?
   projectId  String
   project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdAt  DateTime  @default(now())
@@ -217,6 +221,7 @@ enum StakeholderRole {
   BUYER_AGENT
   SELLER_AGENT
   ESCROW
+  INSPECTOR
   VENDOR
   LENDER
   TITLE

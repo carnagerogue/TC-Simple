@@ -7,6 +7,7 @@ import { EmailDraftModal } from "./EmailDraftModal";
 import { TagEditModal } from "./TagEditModal";
 import { TaskDetailModal } from "./TaskDetailModal";
 import { extractRoleFromTags, tagsIncludeEmail, renderTemplate, normalizeRoleToStakeholder } from "@/lib/emailHelpers";
+import { extractEmailRolesFromTags, emailRoleLabel, emailRoleToStakeholder } from "@/lib/emailTagging";
 
 type Task = {
   id: string;
@@ -18,6 +19,10 @@ type Task = {
   description?: string | null;
   template?: string | null;
   priority?: boolean;
+  emailRecipientRole?: string | null;
+  emailRecipientEmail?: string | null;
+  emailTemplateId?: string | null;
+  emailLastComposedAt?: string | null;
 };
 
 type Project = {
@@ -55,10 +60,20 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
   const [draftModal, setDraftModal] = useState<{
     open: boolean;
     recipient?: { email?: string | null; name?: string; roleLabel?: string };
+    recipients?: Array<{
+      id: string;
+      email?: string | null;
+      name?: string;
+      role: string;
+      roleLabel?: string;
+    }>;
+    selectedRecipientId?: string | null;
     subject?: string;
     body?: string;
     tags?: string;
     contextRole?: string | null;
+    templateId?: string | null;
+    taskId?: string | null;
   }>({ open: false });
 
   const updateMyClientRole = async (role: "BUYER" | "SELLER") => {
@@ -85,75 +100,99 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
     }
   };
 
-  const findRecipientForTask = (task: Task) => {
-    if (!tagsIncludeEmail(task.tags)) return null;
-    const roleTag = extractRoleFromTags(task.tags);
-    const normalized = normalizeRoleToStakeholder(roleTag?.toUpperCase()) || normalizeRoleToStakeholder(roleTag || "");
-    if (!normalized) return null;
+  const findEmailCandidates = (task: Task) => {
+    const emailRoles = extractEmailRolesFromTags(task.tags);
+    if (emailRoles.length === 0 && !tagsIncludeEmail(task.tags)) return [];
 
-    const pickBest = (role: string): Stakeholder | null => {
-      const candidates = stakeholders.filter((s) => s.role === role);
-      if (!candidates.length) return null;
-      if (role === "BUYER" || role === "SELLER") {
-        return candidates.find((c) => c.contact.category === "CLIENT") ?? candidates[0];
-      }
-      if (role === "BUYER_AGENT" || role === "SELLER_AGENT") {
-        return candidates.find((c) => c.contact.category === "AGENT") ?? candidates[0];
-      }
-      return candidates[0];
+    const roles = emailRoles.length
+      ? emailRoles
+      : (() => {
+          const roleTag = extractRoleFromTags(task.tags);
+          return roleTag ? [roleTag as any] : [];
+        })();
+
+    const candidates: Array<{
+      id: string;
+      email?: string | null;
+      name?: string;
+      role: string;
+      roleLabel?: string;
+    }> = [];
+
+    const addCandidate = (roleKey: string, stakeholder: Stakeholder) => {
+      const name = [stakeholder.contact.firstName, stakeholder.contact.lastName].filter(Boolean).join(" ");
+      const label = emailRoles.length ? emailRoleLabel(roleKey as any) : roleKey;
+      candidates.push({
+        id: `${roleKey}:${stakeholder.contact.id}`,
+        email: stakeholder.contact.email,
+        name: name || stakeholder.contact.email || "",
+        role: roleKey,
+        roleLabel: label,
+      });
     };
 
-    let match: Stakeholder | null = pickBest(normalized);
+    roles.forEach((roleKey) => {
+      const normalized = normalizeRoleToStakeholder(roleKey?.toUpperCase()) || normalizeRoleToStakeholder(roleKey || "");
+      const targetRole = emailRoles.length ? emailRoleToStakeholder(roleKey as any) : normalized;
+      if (!targetRole) return;
 
-    // Smart fallbacks
-    if (!match) {
-      const fallbackRole =
-        normalized === "BUYER" ? "BUYER_AGENT" :
-        normalized === "SELLER" ? "SELLER_AGENT" :
-        normalized === "BUYER_AGENT" ? "BUYER" :
-        normalized === "SELLER_AGENT" ? "SELLER" : null;
-      
-      if (fallbackRole) {
-        match = pickBest(fallbackRole);
+      const sameRole = stakeholders.filter((s) => s.role === targetRole);
+      if (sameRole.length === 0) return;
+
+      if (targetRole === "BUYER" || targetRole === "SELLER") {
+        const ordered = [
+          ...sameRole.filter((c) => c.contact.category === "CLIENT"),
+          ...sameRole.filter((c) => c.contact.category !== "CLIENT"),
+        ];
+        ordered.forEach((c) => addCandidate(roleKey, c));
+        return;
       }
-    }
 
-    // Senior Fix: Use ?? null to convert undefined results from .find() to null
-    if (!match) {
-      if (normalized === "ESCROW") {
-        match = stakeholders.find((s) => s.contact.category === "ESCROW") ?? null;
-      } else if (normalized === "LENDER") {
-        match = stakeholders.find((s) => s.contact.category === "LENDER") ?? null;
+      if (targetRole === "BUYER_AGENT" || targetRole === "SELLER_AGENT") {
+        const ordered = [
+          ...sameRole.filter((c) => c.contact.category === "AGENT"),
+          ...sameRole.filter((c) => c.contact.category !== "AGENT"),
+        ];
+        ordered.forEach((c) => addCandidate(roleKey, c));
+        return;
       }
-    }
 
-    if (match) {
-      const name = [match.contact.firstName, match.contact.lastName].filter(Boolean).join(" ");
-      return { email: match.contact.email, name: name || match.contact.email || "", role: normalized };
-    }
-    return null;
+      sameRole.forEach((c) => addCandidate(roleKey, c));
+    });
+
+    return candidates;
   };
 
-  const recipientLabel = (task: Task) => {
-    const rec = findRecipientForTask(task);
-    if (!rec) return null;
-    const roleLabelMap: Record<string, string> = {
-      BUYER: "Buyer", SELLER: "Seller", BUYER_AGENT: "Buyer Agent",
-      SELLER_AGENT: "Seller Agent", LENDER: "Lender", ESCROW: "Escrow",
-    };
-    return `${rec.name || "Recipient"} (${roleLabelMap[rec.role] || rec.role})`;
+  const resolveRecipient = (task: Task) => {
+    const candidates = findEmailCandidates(task);
+    if (!candidates.length) return { candidates, recipient: null, selectedId: null };
+
+    if (task.emailRecipientEmail) {
+      const match = candidates.find((c) => c.email === task.emailRecipientEmail) || null;
+      return { candidates, recipient: match, selectedId: match?.id || null };
+    }
+
+    if (candidates.length === 1) {
+      return { candidates, recipient: candidates[0], selectedId: candidates[0].id };
+    }
+
+    return { candidates, recipient: null, selectedId: null };
   };
 
   const openDraftForTask = (task: Task) => {
-    const rec = findRecipientForTask(task);
+    const { candidates, recipient, selectedId } = resolveRecipient(task);
     const rendered = renderTemplate(task.template || task.title, { summary: project.summary, myClientRole }, stakeholders);
     setDraftModal({
       open: true,
-      recipient: rec ? { email: rec.email, name: rec.name, roleLabel: recipientLabel(task) || undefined } : undefined,
+      recipient: recipient ? { email: recipient.email, name: recipient.name, roleLabel: recipient.roleLabel } : undefined,
+      recipients: candidates,
+      selectedRecipientId: selectedId,
       subject: task.title,
       body: rendered,
       tags: task.tags || "",
       contextRole: extractRoleFromTags(task.tags) || null,
+      templateId: task.emailTemplateId ?? null,
+      taskId: task.id,
     });
   };
 
@@ -278,7 +317,16 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
             </div>
           </div>
           <div className="space-y-2">
-            {tasks.map((task) => (
+            {tasks.map((task) => {
+              const emailEnabled = tagsIncludeEmail(task.tags) || extractEmailRolesFromTags(task.tags).length > 0;
+              const { recipient, candidates } = resolveRecipient(task);
+              const label = recipient
+                ? `${recipient.name || "Recipient"} (${recipient.roleLabel || recipient.role})`
+                : candidates.length > 1
+                ? "Select recipient"
+                : null;
+              const emailMissing = emailEnabled && (candidates.length === 0 || (recipient && !recipient.email));
+              return (
               <ProjectTaskCard
                 key={task.id}
                 {...task}
@@ -289,14 +337,14 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
                 onOpen={() => setDetailModal({ open: true, task })}
                 onDraftEmail={() => openDraftForTask(task)}
                 onAddStakeholder={() => setForceStakeholderModal(true)}
-                emailRecipientLabel={recipientLabel(task)}
-                hasEmail={tagsIncludeEmail(task.tags)}
+                emailRecipientLabel={label}
+                hasEmail={emailEnabled}
                 onTogglePriority={() => togglePriority(task.id, !(task.priority ?? false))}
                 onDueDateChange={(next) => updateDueDate(task.id, next)}
-                emailMissing={tagsIncludeEmail(task.tags) && !recipientLabel(task)}
+                emailMissing={emailMissing}
                 notesPreview={task.notes ?? undefined}
               />
-            ))}
+            )})}
           </div>
         </div>
         <div className="w-full max-w-[420px] shrink-0">
@@ -326,6 +374,42 @@ export function ProjectTasksClient({ projectId, initialProject, initialTasks }: 
         projectId={projectId}
         stakeholders={stakeholders}
         projectSummary={project.summary || {}}
+        onRecipientChange={async (recipientId) => {
+          if (!draftModal.taskId || !draftModal.recipients) return;
+          const match = draftModal.recipients.find((r) => r.id === recipientId) || null;
+          patchLocalTask(draftModal.taskId, {
+            emailRecipientEmail: match?.email ?? null,
+            emailRecipientRole: match?.role ?? null,
+          });
+          try {
+            await updateTask(draftModal.taskId, {
+              emailRecipientEmail: match?.email ?? null,
+              emailRecipientRole: match?.role ?? null,
+            });
+          } catch (e) {
+            console.error(e);
+          }
+        }}
+        onTemplateUsed={async (templateId) => {
+          if (!draftModal.taskId) return;
+          patchLocalTask(draftModal.taskId, { emailTemplateId: templateId });
+          try {
+            await updateTask(draftModal.taskId, { emailTemplateId: templateId });
+          } catch (e) {
+            console.error(e);
+          }
+        }}
+        onComposed={async () => {
+          if (!draftModal.taskId) return;
+          const ts = new Date().toISOString();
+          patchLocalTask(draftModal.taskId, { emailLastComposedAt: ts });
+          try {
+            await updateTask(draftModal.taskId, { emailLastComposedAt: ts });
+          } catch (e) {
+            console.error(e);
+          }
+        }}
+        onAddStakeholder={() => setForceStakeholderModal(true)}
       />
 
       <TaskDetailModal

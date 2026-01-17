@@ -51,6 +51,10 @@ export default async function ProjectTasksPage({ params }: PageProps) {
     tags: t.tags ?? null,
     notes: t.notes ?? null,
     priority: t.priority ?? false,
+    emailRecipientRole: t.emailRecipientRole ?? null,
+    emailRecipientEmail: t.emailRecipientEmail ?? null,
+    emailTemplateId: t.emailTemplateId ?? null,
+    emailLastComposedAt: t.emailLastComposedAt ? t.emailLastComposedAt.toISOString() : null,
   }));
 
   return (

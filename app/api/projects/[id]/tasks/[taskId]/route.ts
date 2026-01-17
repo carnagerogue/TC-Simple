@@ -26,6 +26,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         notes?: string | null;
         dueDate?: string | null;
         tags?: string | null;
+        emailRecipientRole?: string | null;
+        emailRecipientEmail?: string | null;
+        emailTemplateId?: string | null;
+        emailLastComposedAt?: string | null;
       }
     | null;
 
@@ -35,12 +39,33 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     notes?: string | null;
     dueDate?: Date | null;
     tags?: string | null;
+    emailRecipientRole?: string | null;
+    emailRecipientEmail?: string | null;
+    emailTemplateId?: string | null;
+    emailLastComposedAt?: Date | null;
   } = {};
 
   if (typeof body?.status === "string") update.status = body.status;
   if (typeof body?.priority === "boolean") update.priority = body.priority;
   if (typeof body?.notes === "string" || body?.notes === null) update.notes = body.notes ?? null;
   if (typeof body?.tags === "string" || body?.tags === null) update.tags = body.tags ?? null;
+  if (typeof body?.emailRecipientRole === "string" || body?.emailRecipientRole === null) {
+    update.emailRecipientRole = body.emailRecipientRole ?? null;
+  }
+  if (typeof body?.emailRecipientEmail === "string" || body?.emailRecipientEmail === null) {
+    update.emailRecipientEmail = body.emailRecipientEmail ?? null;
+  }
+  if (typeof body?.emailTemplateId === "string" || body?.emailTemplateId === null) {
+    update.emailTemplateId = body.emailTemplateId ?? null;
+  }
+  if (body?.emailLastComposedAt === null) update.emailLastComposedAt = null;
+  if (typeof body?.emailLastComposedAt === "string" && body.emailLastComposedAt) {
+    const parsed = new Date(body.emailLastComposedAt);
+    if (Number.isNaN(parsed.getTime())) {
+      return NextResponse.json({ error: "Invalid emailLastComposedAt" }, { status: 400 });
+    }
+    update.emailLastComposedAt = parsed;
+  }
   if (body?.dueDate === null) update.dueDate = null;
   if (typeof body?.dueDate === "string" && body.dueDate) {
     const parsed = new Date(body.dueDate);
@@ -81,6 +106,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     notes: updated.notes,
     dueDate: updated.dueDate?.toISOString() ?? null,
     tags: updated.tags,
+    emailRecipientRole: updated.emailRecipientRole ?? null,
+    emailRecipientEmail: updated.emailRecipientEmail ?? null,
+    emailTemplateId: updated.emailTemplateId ?? null,
+    emailLastComposedAt: updated.emailLastComposedAt?.toISOString() ?? null,
   });
 }
 

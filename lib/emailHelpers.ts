@@ -1,4 +1,5 @@
 import { StakeholderRole } from "@prisma/client";
+import { extractEmailRolesFromTags, emailRoleToStakeholder } from "@/lib/emailTagging";
 
 /**
  * Extract the target role from a comma-delimited tags string.
@@ -6,6 +7,8 @@ import { StakeholderRole } from "@prisma/client";
  */
 export function extractRoleFromTags(tags?: string | null): string | null {
   if (!tags) return null;
+  const emailRoles = extractEmailRolesFromTags(tags);
+  if (emailRoles.length > 0) return emailRoles[0];
   const parts = tags
     .split(",")
     .map((p) => p.trim().toLowerCase())
@@ -18,6 +21,7 @@ export function extractRoleFromTags(tags?: string | null): string | null {
 
 export function tagsIncludeEmail(tags?: string | null) {
   if (!tags) return false;
+  if (extractEmailRolesFromTags(tags).length > 0) return true;
   return tags
     .split(",")
     .map((p) => p.trim().toLowerCase())
@@ -28,8 +32,10 @@ export function normalizeRoleToStakeholder(role?: string | null): StakeholderRol
   if (!role) return null;
   const upper = role.toUpperCase();
   switch (upper) {
+    case "BUYER_CLIENT":
     case "BUYER":
       return "BUYER";
+    case "SELLER_CLIENT":
     case "SELLER":
       return "SELLER";
     case "BUYER_AGENT":
@@ -46,9 +52,30 @@ export function normalizeRoleToStakeholder(role?: string | null): StakeholderRol
     case "ESCROW_OFFICER":
     case "ESCROW-OFFICER":
       return "ESCROW";
+    case "TITLE":
+    case "TITLE_COMPANY":
+      return "TITLE";
+    case "INSPECTOR":
+      return "INSPECTOR";
     default:
-      return null;
+      return (() => {
+        const mapped = lowerToEmailRole(role);
+        return mapped ? emailRoleToStakeholder(mapped) : null;
+      })();
   }
+}
+
+function lowerToEmailRole(raw: string): import("./emailTagging").EmailRecipientRole | null {
+  const normalized = raw.toLowerCase().replace(/\s+/g, "_");
+  if (normalized === "buyer_client") return "buyer_client";
+  if (normalized === "seller_client") return "seller_client";
+  if (normalized === "buyer_agent") return "buyer_agent";
+  if (normalized === "seller_agent") return "seller_agent";
+  if (normalized === "escrow") return "escrow";
+  if (normalized === "lender") return "lender";
+  if (normalized === "title") return "title";
+  if (normalized === "inspector") return "inspector";
+  return null;
 }
 
 type ContactLike = { firstName?: string | null; lastName?: string | null; email?: string | null; phone?: string | null };
