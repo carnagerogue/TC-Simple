@@ -13,6 +13,7 @@ type Props = {
 export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderTaskRef = useRef<{ cancel?: () => void } | null>(null);
+  const loadTaskRef = useRef<pdfjsLib.PDFDocumentLoadingTask | null>(null);
   const scrollLockRef = useRef(0);
   const [doc, setDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -34,15 +35,29 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
     setPageNumber(1);
     setNumPages(0);
     setPageSize(null);
 
-    const task = pdfjsLib.getDocument(url);
-    task.promise
-      .then((loaded) => {
+    const load = async () => {
+      try {
+        const resolved = typeof window !== "undefined" ? new URL(url, window.location.href) : null;
+        const sameOrigin =
+          !!resolved && (resolved.origin === window.location.origin || resolved.protocol === "blob:");
+        const response = await fetch(resolved ? resolved.toString() : url, {
+          credentials: sameOrigin ? "include" : "omit",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to load PDF (${response.status})`);
+        }
+        const data = new Uint8Array(await response.arrayBuffer());
+        const task = pdfjsLib.getDocument({ data });
+        loadTaskRef.current = task;
+        const loaded = await task.promise;
         if (cancelled) {
           loaded.destroy?.();
           return;
@@ -50,16 +65,23 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
         setDoc(loaded);
         setNumPages(loaded.numPages);
         setPageNumber(1);
-      })
-      .catch((err) => {
+      } catch (err: unknown) {
+        if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("[pdf-preview] failed to load", err);
         setError("Unable to load PDF preview.");
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
 
     return () => {
       cancelled = true;
-      task.destroy?.();
+      controller.abort();
+      loadTaskRef.current?.destroy?.();
+      loadTaskRef.current = null;
     };
   }, [url]);
 
@@ -70,31 +92,33 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
     const render = async () => {
       setLoading(true);
       setError(null);
-      const page = await doc.getPage(pageNumber);
-      if (cancelled || !canvasRef.current) return;
-      const viewport = page.getViewport({ scale: zoom });
-      setPageSize({ width: viewport.width, height: viewport.height });
+      try {
+        const page = await doc.getPage(pageNumber);
+        if (cancelled || !canvasRef.current) return;
+        const viewport = page.getViewport({ scale: zoom });
+        setPageSize({ width: viewport.width, height: viewport.height });
 
-      const canvas = canvasRef.current;
-      const context = canvas.getContext("2d");
-      if (!context) {
-        setError("Unable to render PDF preview.");
-        return;
+        const canvas = canvasRef.current;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          setError("Unable to render PDF preview.");
+          return;
+        }
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        renderTaskRef.current?.cancel?.();
+        const task = page.render({ canvasContext: context, viewport });
+        renderTaskRef.current = task;
+        await task.promise;
+      } catch (err) {
+        console.error("[pdf-preview] render error", err);
+        if (!cancelled) setError("Unable to render PDF preview.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      renderTaskRef.current?.cancel?.();
-      const task = page.render({ canvasContext: context, viewport });
-      renderTaskRef.current = task;
-      await task.promise;
-      setLoading(false);
     };
 
-    render().catch((err) => {
-      console.error("[pdf-preview] render error", err);
-      setError("Unable to render PDF preview.");
-      setLoading(false);
-    });
+    render();
 
     return () => {
       cancelled = true;
@@ -142,17 +166,20 @@ export function PdfSinglePagePreview({ url, zoom = 0.78 }: Props) {
       <div
         onWheel={handleWheel}
         tabIndex={0}
-        className="flex w-full items-start justify-center overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9bc4ff]"
+        className="relative flex w-full items-start justify-center overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9bc4ff]"
         style={containerStyle}
         aria-label="PDF preview"
       >
+        <canvas ref={canvasRef} className="block" />
         {error ? (
-          <div className="flex h-full w-full items-center justify-center text-xs text-red-600">{error}</div>
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 text-xs text-red-600">
+            {error}
+          </div>
         ) : loading ? (
-          <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">Rendering...</div>
-        ) : (
-          <canvas ref={canvasRef} className="block" />
-        )}
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-xs text-slate-500">
+            Rendering...
+          </div>
+        ) : null}
       </div>
     </div>
   );
