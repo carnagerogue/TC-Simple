@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,7 @@ export default async function TransactionsPage() {
   );
   if (userIds.length === 0) redirect("/login");
 
+  await ensureDbReady();
   const txns = await db.transaction.findMany({
     where: { userId: { in: userIds } },
     orderBy: { createdAt: "desc" },

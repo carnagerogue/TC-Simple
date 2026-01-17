@@ -1,35 +1,17 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
 // Prisma reads DATABASE_URL at runtime (because schema.prisma uses env("DATABASE_URL")).
-// On Vercel, missing env vars will crash every request that touches the DB.
+// On Vercel, missing/invalid env vars will crash every request that touches the DB.
 // Provide a safe default for SQLite so the app can boot for testing.
+const isVercel = !!process.env.VERCEL;
 if (!process.env.DATABASE_URL) {
-  // Vercel Functions can write to /tmp (ephemeral). Locally we keep the old dev db path.
-  const isVercel = !!process.env.VERCEL;
   const dbPath = isVercel ? "/tmp/tc-simple.db" : "./prisma/dev.db";
   const fallback = `file:${dbPath}`;
-  
   process.env.DATABASE_URL = fallback;
   console.warn(`[db] DATABASE_URL was missing; using fallback (${fallback}).`);
-
-  // Auto-push schema if DB file is missing (crucial for Vercel /tmp)
-  if (isVercel && !fs.existsSync(dbPath)) {
-    console.log("[db] DB file missing in /tmp, running 'prisma db push'...");
-    try {
-      // We need to point to the schema. On Vercel, it's usually at the project root or preserved via config.
-      // We'll try to run the command.
-      execSync("npx prisma db push --skip-generate", { 
-        stdio: "inherit",
-        env: { ...process.env, DATABASE_URL: fallback }
-      });
-      console.log("[db] Schema pushed successfully.");
-    } catch (e) {
-      console.error("[db] Failed to push schema:", e);
-    }
-  }
 }
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
@@ -43,3 +25,62 @@ export const db =
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
 
 export default db;
+
+type DbInitGlobal = { prismaDbInitPromise?: Promise<void> };
+const globalForInit = global as unknown as DbInitGlobal;
+
+function looksLikeTmpSqlite(url: string | undefined): boolean {
+  return !!url && url.startsWith("file:/tmp/");
+}
+
+function prismaCliPath(): string {
+  // Vercel runtime bundles node_modules; run the Prisma CLI without npx/network.
+  return path.join(process.cwd(), "node_modules", "prisma", "build", "index.js");
+}
+
+function runDbPushSync() {
+  const cli = prismaCliPath();
+  if (!fs.existsSync(cli)) {
+    throw new Error(`Prisma CLI not found at ${cli}`);
+  }
+  execSync(`${process.execPath} ${cli} db push --skip-generate`, {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      PRISMA_HIDE_UPDATE_MESSAGE: "1",
+      PRISMA_TELEMETRY_INFORMATION: "none",
+    },
+  });
+}
+
+async function hasTransactionTable(): Promise<boolean> {
+  const rows = (await db.$queryRaw(
+    Prisma.sql`SELECT name FROM sqlite_master WHERE type='table' AND name='Transaction' LIMIT 1`
+  )) as Array<{ name?: string }>;
+  return rows.length > 0;
+}
+
+/**
+ * Ensures the SQLite schema exists on Vercel when using an ephemeral /tmp database.
+ * This is needed because /tmp is empty on each cold start.
+ */
+export async function ensureDbReady(): Promise<void> {
+  if (!isVercel) return;
+  if (!looksLikeTmpSqlite(process.env.DATABASE_URL)) return;
+
+  if (!globalForInit.prismaDbInitPromise) {
+    globalForInit.prismaDbInitPromise = (async () => {
+      try {
+        const ok = await hasTransactionTable();
+        if (ok) return;
+        console.log("[db] Missing schema in /tmp sqlite DB; running prisma db push...");
+        runDbPushSync();
+      } catch (e) {
+        console.error("[db] ensureDbReady failed", e);
+        throw e;
+      }
+    })();
+  }
+
+  await globalForInit.prismaDbInitPromise;
+}

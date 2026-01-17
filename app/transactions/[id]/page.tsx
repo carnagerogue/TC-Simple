@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { TransactionEditor } from "@/components/dashboard/TransactionEditor";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +19,7 @@ export default async function TransactionDetailPage({ params }: PageProps) {
   );
   if (userIds.length === 0) redirect("/login");
 
+  await ensureDbReady();
   const transaction = await db.transaction.findFirst({
     where: { id: params.id, userId: { in: userIds } },
   });

@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ProjectsBoard } from "@/components/dashboard/ProjectsBoard";
 import { PriorityTasksPanel } from "@/components/dashboard/PriorityTasksPanel";
@@ -21,6 +21,7 @@ export default async function DashboardPage() {
   }
 
   try {
+    await ensureDbReady();
     const dbTransactions = await db.transaction.findMany({
       where: {
         userId,
