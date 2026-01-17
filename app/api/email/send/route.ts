@@ -61,9 +61,25 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ sent: true });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Failed to send email via Gmail:", error);
-    return NextResponse.json({ error: "Unable to send email." }, { status: 500 });
+    const maybeError = error as {
+      message?: string;
+      response?: { status?: number; data?: { error?: { message?: string } } };
+    };
+    const status = maybeError.response?.status;
+    const apiMessage = maybeError.response?.data?.error?.message;
+    if (status === 401 || status === 403) {
+      return NextResponse.json(
+        {
+          error:
+            apiMessage ||
+            "Google authorization is missing Gmail send permission. Reconnect Google and try again.",
+        },
+        { status: status ?? 403 }
+      );
+    }
+    return NextResponse.json({ error: apiMessage || maybeError.message || "Unable to send email." }, { status: 500 });
   }
 }
 

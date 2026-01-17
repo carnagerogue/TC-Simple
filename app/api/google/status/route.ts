@@ -14,6 +14,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const scopeString = typeof googleClient.token?.scope === "string" ? googleClient.token.scope : "";
+    const scopes = scopeString.split(" ").filter(Boolean);
+    const requiredScope = "https://www.googleapis.com/auth/gmail.send";
+    if (scopes.length && !scopes.includes(requiredScope)) {
+      return NextResponse.json({
+        status: "missing_scope",
+        error: "Gmail send permission is missing. Reconnect Google to enable sending.",
+      });
+    }
+
     // This will refresh via refresh_token if needed (we provided clientId/secret in lib/google.ts).
     const accessToken = await googleClient.oauth2Client.getAccessToken();
     if (!accessToken?.token) {

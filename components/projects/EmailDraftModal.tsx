@@ -106,13 +106,17 @@ export function EmailDraftModal({
     setSendHint(null);
     fetch("/api/google/status", { cache: "no-store" })
       .then((res) => res.json())
-      .then((data: { status?: string }) => {
+      .then((data: { status?: string; error?: string }) => {
         if (!mounted) return;
         if (data.status === "ok") {
           setCanSend(true);
         } else {
           setCanSend(false);
-          setSendHint("Connect Google to send email directly.");
+          setSendHint(
+            data.status === "missing_scope"
+              ? "Reconnect Google to enable Gmail sending."
+              : data.error || "Connect Google to send email directly."
+          );
         }
       })
       .catch(() => {
