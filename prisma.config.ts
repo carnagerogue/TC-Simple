@@ -11,9 +11,9 @@ export default defineConfig({
   },
   engine: "classic",
   datasource: {
-    // Vercel builds can run `prisma generate` before env vars are configured.
-    // Prisma Client generation doesn't need a live DB connection, but Prisma's `env()`
-    // helper throws if the variable is missing. Provide a safe SQLite fallback.
-    url: process.env.DATABASE_URL ?? "file:./prisma/dev.db",
+    // Prisma Client generation doesn't need a live DB connection.
+    // Default to a local Postgres URL if DATABASE_URL isn't set (dev convenience).
+    // NOTE: On Vercel you MUST set DATABASE_URL to a persistent Postgres DB.
+    url: process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/tc_simple?schema=public",
   },
 });
