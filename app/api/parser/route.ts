@@ -13,7 +13,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File is required" }, { status: 400 });
     }
 
-    const parserUrl = process.env.PARSER_URL || process.env.INTAKE_SERVICE_URL || DEFAULT_PARSER_URL;
+    const configured = process.env.PARSER_URL || process.env.INTAKE_SERVICE_URL;
+    if (!configured && process.env.VERCEL) {
+      return NextResponse.json(
+        {
+          error:
+            "Parser is not configured for production. Set PARSER_URL (or INTAKE_SERVICE_URL) to the public URL of your intake-service, ending with /intake.",
+        },
+        { status: 503 }
+      );
+    }
+
+    const parserUrl = configured || DEFAULT_PARSER_URL;
     const outbound = new FormData();
     outbound.append("file", file);
 

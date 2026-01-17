@@ -61,12 +61,29 @@ async function uploadToParser(file: File) {
     body: form,
   });
 
+  const raw = await res.text().catch(() => "");
+  const parseJson = () => {
+    try {
+      return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    } catch {
+      return null;
+    }
+  };
+
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Parser request failed");
+    const body = parseJson();
+    const message =
+      (body && typeof body.error === "string" && body.error) ||
+      raw ||
+      `Parser request failed (${res.status})`;
+    throw new Error(message);
   }
 
-  return res.json();
+  const body = parseJson();
+  if (!body) {
+    throw new Error(`Parser returned non-JSON (${res.status}).`);
+  }
+  return body;
 }
 
 export function UploadForm() {
@@ -164,29 +181,46 @@ export function UploadForm() {
         body: formData,
       });
 
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Upload failed.");
+      const rawPayload = await response.text().catch(() => "");
+      let payload: Record<string, unknown> = {};
+      try {
+        payload = rawPayload ? (JSON.parse(rawPayload) as Record<string, unknown>) : {};
+      } catch {
+        payload = {};
       }
 
-      const driveMsg = payload.driveLinks?.view
-        ? ` View in Drive: ${payload.driveLinks.view}`
-        : "";
+      if (!response.ok) {
+        const message =
+          (typeof payload.error === "string" && payload.error) ||
+          (rawPayload && rawPayload.slice(0, 240)) ||
+          "Upload failed.";
+        throw new Error(message);
+      }
+
+      const driveLinks = (payload.driveLinks as { view?: string } | undefined) ?? undefined;
+      const driveMsg = driveLinks?.view ? ` View in Drive: ${driveLinks.view}` : "";
 
       setStatus({
         type: "success",
-        message:
-          payload.message ??
-          `Uploaded ${payload.fileName ?? file.name} successfully.${driveMsg}${
-            parserWarning ? ` (Parser unavailable: ${parserWarning})` : ""
-          }`,
+        message: (() => {
+          const msg =
+            typeof payload.message === "string" && payload.message
+              ? payload.message
+              : `Uploaded ${
+                  (typeof payload.fileName === "string" && payload.fileName) || file.name
+                } successfully.${driveMsg}`;
+          return `${msg}${parserWarning ? ` (Parser unavailable: ${parserWarning})` : ""}`;
+        })(),
       });
       setFile(null);
-      setTransactionId(payload.transactionId ?? null);
-      setDocumentId(payload.documentId ?? null);
-      const parsedSource = extracted || payload.parsedData || null;
-      if (payload.documentId) {
+      setTransactionId(typeof payload.transactionId === "string" ? payload.transactionId : null);
+      setDocumentId(typeof payload.documentId === "string" ? payload.documentId : null);
+      const parsedSource =
+        extracted ||
+        (payload.parsedData && typeof payload.parsedData === "object" && !Array.isArray(payload.parsedData)
+          ? (payload.parsedData as Record<string, unknown>)
+          : null);
+      if (typeof payload.documentId === "string" && payload.documentId) {
         setPreviewUrl(`/api/documents/${payload.documentId}`);
       }
       setParsedItems(buildParsedItems(parsedSource));

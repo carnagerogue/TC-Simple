@@ -44,7 +44,12 @@ export async function POST(request: NextRequest) {
   }
 
   // Ensure tables exist for the ephemeral /tmp SQLite DB on Vercel.
-  await ensureDbReady();
+  try {
+    await ensureDbReady();
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Unable to initialize database";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 
   const formData = await request.formData();
   const file = formData.get("file");
@@ -76,7 +81,11 @@ export async function POST(request: NextRequest) {
 
     // Call Intake Service (best-effort)
     try {
-      const intakeUrl = process.env.INTAKE_SERVICE_URL || "http://localhost:8000/intake";
+      const intakeUrl = process.env.PARSER_URL || process.env.INTAKE_SERVICE_URL || null;
+      if (!intakeUrl) {
+        // Not configured; skip parsing (upload still works)
+        parsedData = null;
+      } else {
       const intakeFormData = new FormData();
       intakeFormData.append("file", new Blob([buffer], { type: file.type }), file.name);
 
@@ -90,6 +99,7 @@ export async function POST(request: NextRequest) {
         parsedData = isRecord(json) ? json : null;
       } else {
         console.warn("Intake service failed:", await intakeRes.text());
+      }
       }
     } catch (e: unknown) {
       console.warn("Failed to connect to intake service:", e);
